@@ -9,3 +9,15 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_anb_user     ON users(id);
+
+CREATE TABLE IF NOT EXISTS videos (
+  id         SERIAL PRIMARY KEY,
+  title      TEXT NOT NULL,
+  url        TEXT NOT NULL,
+  status     TEXT NOT NULL CHECK (status IN ('uploaded','processing','processed','failed')),
+  user_id    INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_anb_video     ON videos(id);
