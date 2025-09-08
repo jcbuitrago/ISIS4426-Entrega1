@@ -43,14 +43,12 @@ func (e *Enqueuer) GetStatus(ctx context.Context, jobID string) (string, error) 
 	return e.Redis.Get(ctx, jobKey(jobID)).Result()
 }
 
-func (e *Enqueuer) EnqueueVideoProcessing(ctx context.Context, userID int, title, tmpPath string) (string, error) {
+func (e *Enqueuer) EnqueueVideoProcessing(ctx context.Context, videoID, userID int, title, tmpPath string) (string, error) {
 	jobID := uuid.NewString()
 	b, _ := json.Marshal(ProcessVideoPayload{
-		JobID: jobID, UserID: userID, Title: title, InputPath: tmpPath,
+		JobID: jobID, VideoID: videoID, UserID: userID, Title: title, InputPath: tmpPath,
 	})
 	task := asynq.NewTask(TypeProcessVideo, b)
-
-	// 👇 La cola debe llamarse EXACTAMENTE "videos"
 	if _, err := e.Client.EnqueueContext(ctx, task, asynq.Queue("videos")); err != nil {
 		return "", err
 	}

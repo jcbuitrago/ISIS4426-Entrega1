@@ -14,57 +14,53 @@ import (
 	"ISIS4426-Entrega1/app/models"
 	"ISIS4426-Entrega1/app/repos"
 	"ISIS4426-Entrega1/app/services"
-	appdb "ISIS4426-Entrega1/db"
 
 	"github.com/hibiken/asynq"
 )
 
+func getenv(k, d string) string {
+	if v := os.Getenv(k); v != "" { return v }
+	return d
+}
+
 func run(cmd *exec.Cmd) error {
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("cmd failed: %v\n%s", err, string(out))
-	}
-	return nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func handleProcessVideo(svc *services.VideoService, enq *async.Enqueuer) asynq.HandlerFunc {
 	return func(ctx context.Context, t *asynq.Task) error {
 		var p async.ProcessVideoPayload
-		if err := json.Unmarshal(t.Payload(), &p); err != nil {
-			return err
-		}
-		_ = enq.SetStatus(ctx, p.JobID, "processing:start", 24*time.Hour)
+		if err := json.Unmarshal(t.Payload(), &p); err != nil { return err }
 
-		// Archivos y rutas
-		input := p.InputPath // viene de la API (/data/uploads/xxx.mp4)
-		workDir := "/data/work"
-		_ = os.MkdirAll(workDir, 0o775)
+		_ = enq.SetStatus(ctx, p.JobID, "processing:trim", 24*time.Hour)
 
-		trimmed := filepath.Join(workDir, "trimmed.mp4")
-		scaledMain := filepath.Join(workDir, "main_720p.mp4")
+		// paths
+		input := p.InputPath
+		work := filepath.Dir(input)
+		mainTrim := filepath.Join(work, fmt.Sprintf("video_%d_trim.mp4", p.VideoID))
+		scaledMain := filepath.Join(work, fmt.Sprintf("video_%d_720p.mp4", p.VideoID))
 		intro := "/assets/intro.mp4"
 		outro := "/assets/outro.mp4"
-		intro720 := filepath.Join(workDir, "intro_720p.mp4")
-		outro720 := filepath.Join(workDir, "outro_720p.mp4")
-		final := filepath.Join("/data/processed", fmt.Sprintf("video_%d_final.mp4", p.VideoID))
+		intro720 := filepath.Join(work, "intro_720.mp4")
+		outro720 := filepath.Join(work, "outro_720.mp4")
+		final := filepath.Join("/data", "processed", fmt.Sprintf("%d_final.mp4", p.VideoID))
+
 		_ = os.MkdirAll(filepath.Dir(final), 0o775)
 
-		// 1) Recorta a 30s
-		_ = enq.SetStatus(ctx, p.JobID, "processing:trim", 24*time.Hour)
-		if err := run(trimTo30(input, trimmed)); err != nil {
+		// 1) Trim
+		if err := run(trimTo30(input, mainTrim)); err != nil {
 			_ = enq.SetStatus(ctx, p.JobID, "failed:trim", 24*time.Hour)
 			return err
 		}
-
-		// 2) Escala/pad a 720p 16:9 el clip principal
-		_ = enq.SetStatus(ctx, p.JobID, "processing:scale_main", 24*time.Hour)
-		if err := run(to720p16x9(trimmed, scaledMain)); err != nil {
+		// 2) Scale main
+		_ = enq.SetStatus(ctx, p.JobID, "processing:scale", 24*time.Hour)
+		if err := run(to720p16x9(mainTrim, scaledMain)); err != nil {
 			_ = enq.SetStatus(ctx, p.JobID, "failed:scale_main", 24*time.Hour)
 			return err
 		}
-
-		// 3) Asegura que intro/outro también sean 720p 16:9
-		_ = enq.SetStatus(ctx, p.JobID, "processing:scale_intro_outro", 24*time.Hour)
+		// 3) Scale intro/outro
 		if err := run(to720p16x9(intro, intro720)); err != nil {
 			_ = enq.SetStatus(ctx, p.JobID, "failed:scale_intro", 24*time.Hour)
 			return err
@@ -73,81 +69,58 @@ func handleProcessVideo(svc *services.VideoService, enq *async.Enqueuer) asynq.H
 			_ = enq.SetStatus(ctx, p.JobID, "failed:scale_outro", 24*time.Hour)
 			return err
 		}
-
-		// 4) Concat intro + main + outro
+		// 4) Concat
 		_ = enq.SetStatus(ctx, p.JobID, "processing:concat", 24*time.Hour)
 		if err := run(concatIntroMainOutro(intro720, scaledMain, outro720, final)); err != nil {
 			_ = enq.SetStatus(ctx, p.JobID, "failed:concat", 24*time.Hour)
 			return err
 		}
-
-		// 5) Guarda en DB
-		created, err := svc.Create(p.UserID, p.Title, final)
-		if err != nil {
-			log.Printf("create failed (title=%s url=%s): %v", p.Title, final, err)
-			_ = enq.SetStatus(ctx, p.JobID, "failed:db_create", 24*time.Hour)
+		// 5) Eliminar audio del final (requisito)
+		noaudio := filepath.Join("/data", "processed", fmt.Sprintf("%d_final_noaudio.mp4", p.VideoID))
+		cmdNoAudio := exec.Command("ffmpeg", "-y", "-i", final, "-an", "-c:v", "copy", noaudio)
+		if err := run(cmdNoAudio); err != nil {
+			_ = enq.SetStatus(ctx, p.JobID, "failed:mute", 24*time.Hour)
 			return err
 		}
+		final = noaudio
 
-		publicURL := fmt.Sprintf("http://%s:%s/static/processed/%s",
-			"localhost",
-			"8080",
-			filepath.Base(final),
-		)
-		log.Printf("update processed url (id=%d url=%s)", created.VideoID, publicURL)
-
-		if err := svc.UpdateProcessedURL(ctx, created.VideoID, publicURL); err != nil {
-			log.Printf("update processed url failed (id=%d url=%s): %v", created.VideoID, publicURL, err)
+		// 6) Actualizar DB
+		if err := svc.UpdateStatus(ctx, p.VideoID, models.StatusProcessing); err != nil {
+			_ = enq.SetStatus(ctx, p.JobID, "failed:update_status_processing", 24*time.Hour)
+			return err
+		}
+		publicURL := fmt.Sprintf("/static/processed/%d_final_noaudio.mp4", p.VideoID)
+		if err := svc.UpdateProcessedURL(ctx, p.VideoID, publicURL); err != nil {
 			_ = enq.SetStatus(ctx, p.JobID, "failed:update_processed_url", 24*time.Hour)
 			return err
 		}
-
-		if err := svc.UpdateStatus(ctx, created.VideoID, models.StatusProcessed); err != nil {
-			log.Printf("update status failed (id=%d status=%s): %v", created.VideoID, models.StatusProcessed, err)
-			_ = enq.SetStatus(ctx, p.JobID, "failed:update_status", 24*time.Hour)
+		if err := svc.UpdateStatus(ctx, p.VideoID, models.StatusProcessed); err != nil {
+			_ = enq.SetStatus(ctx, p.JobID, "failed:update_status_processed", 24*time.Hour)
 			return err
 		}
-
-		_ = enq.SetStatus(ctx, p.JobID, "done", 24*time.Hour)
-
-		// Limpieza opcional de temporales
-		_ = os.Remove(trimmed)
-		_ = os.Remove(scaledMain)
-		_ = os.Remove(intro720)
-		_ = os.Remove(outro720)
-
+		_ = enq.SetStatus(ctx, p.JobID, "completed", 24*time.Hour)
 		return nil
 	}
 }
 
 func main() {
-	// DB y dependencias
-	sqlDB := appdb.MustOpen()
-	repo := repos.NewVideoRepoPG(sqlDB)
+	redis := getenv("REDIS_ADDR", "redis:6379")
+	dsn := getenv("DB_DSN", "postgres://postgres:postgres@db:5432/anb-showcase?sslmode=disable")
+
+	db := repos.MustOpenPostgres(dsn)
+	defer db.Close()
+
+	repo := repos.NewVideoRepoPG(db)
 	svc := services.NewVideoService(repo)
-
-	// Redis
-	redis := os.Getenv("REDIS_ADDR")
-	if redis == "" {
-		redis = "redis:6379"
-	}
 	enq := async.NewEnqueuer(redis)
-	defer enq.Client.Close()
 
-	// Worker Asynq
-	srv := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: redis},
-		asynq.Config{
-			// Debe coincidir con la cola usada al encolar en la API (p. ej. "videos")
-			Queues: map[string]int{"videos": 10},
-		},
+	srv := asynq.NewServer(asynq.RedisClientOpt{Addr: redis},
+		asynq.Config{Queues: map[string]int{"videos": 10}},
 	)
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(async.TypeProcessVideo, handleProcessVideo(svc, enq))
 
 	log.Println("worker: listening on redis", redis, "queue=videos")
-	if err := srv.Run(mux); err != nil {
-		log.Fatal(err)
-	}
+	if err := srv.Run(mux); err != nil { log.Fatal(err) }
 }
