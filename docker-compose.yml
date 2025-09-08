@@ -11,7 +11,6 @@ services:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks: [app-backend]
     healthcheck:
-      # usa $$ para que compose no expanda variables aquí
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
@@ -19,9 +18,8 @@ services:
 
   redis:
     image: redis:7
-    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
-    ports: ["6379:6380"]
+    # ports: ["6380:6379"]   # opcional si quieres verlo fuera de docker
     volumes: [redisdata:/data]
     networks: [app-backend]
     healthcheck:
@@ -32,7 +30,7 @@ services:
 
   asynqmon:
     image: hibiken/asynqmon:latest
-    command: ["--redis-addr=redis:6379", "--addr=:8081"]
+    command: ["--redis-addr=redis:6379", "--addr=:8081", "--redis-db=0"]
     ports: ["8081:8081"]
     depends_on:
       redis:
@@ -44,19 +42,18 @@ services:
       context: ./back
       dockerfile: Dockerfile
       args:
-        PKG: .                 # 👈 compila back/main.go (tu API en la raíz de back)
+        PKG: .                 # compila main.go en la raíz de back
     image: anb-showcase-backend:api
     container_name: backend
     environment:
       DB_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_ADDR: redis:6379
       PORT: "8080"
-      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - videodata:/data
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
     ports: ["8080:8080"]
     networks: [app-backend]
     restart: unless-stopped
@@ -66,18 +63,18 @@ services:
       context: ./back
       dockerfile: Dockerfile
       args:
-        PKG: ./cmd/worker      # 👈 compila el worker
+        PKG: ./cmd/worker      # compila el main.go del worker
     image: anb-showcase-backend:worker
     container_name: worker
     environment:
       DB_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_ADDR: redis:6379
-      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - videodata:/data
+      - ./assets:/assets:ro
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [app-backend]
     restart: unless-stopped
 
@@ -87,3 +84,4 @@ networks:
 volumes:
   pgdata:
   redisdata:
+  videodata:

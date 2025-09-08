@@ -1,4 +1,3 @@
-// back/main.go
 package main
 
 import (
@@ -7,9 +6,7 @@ import (
 	"os"
 
 	"ISIS4426-Entrega1/app/async"
-	"ISIS4426-Entrega1/app/repos"
 	"ISIS4426-Entrega1/app/routers"
-	appdb "ISIS4426-Entrega1/db"
 
 	"github.com/gorilla/mux"
 )
@@ -22,28 +19,30 @@ func getenv(k, d string) string {
 }
 
 func main() {
-	// 1) Abrir Postgres (usa env: DB_DSN o DB_HOST/DB_USER/DB_PASSWORD/DB_NAME)
-	sqlDB := appdb.MustOpen()
+	// DB
 
-	// 2) Inyectar repo PG
-	repo := repos.NewVideoRepoPG(sqlDB)
-
-	// 3) Encolador Asynq (Redis)
-	redisAddr := getenv("REDIS_ADDR", "127.0.0.1:6379")
-	enq := async.NewEnqueuer(redisAddr)
+	// Redis / Enqueuer
+	redis := getenv("REDIS_ADDR", "redis:6379")
+	enq := async.NewEnqueuer(redis)
 	defer enq.Client.Close()
 
-	// 4) Router y handlers
-	h := routers.NewVideosHandler(repo, enq)
+	// Handlers
+	hVideos := routers.NewVideosHandler(enq) // solo encola
+	hJobs := routers.NewJobsHandler(enq)
 
+	// Router
 	r := mux.NewRouter()
 	api := r.PathPrefix("/api").Subrouter()
-	api.HandleFunc("/videos", h.Create).Methods("POST")
-	api.HandleFunc("/videos", h.List).Methods("GET")
-	api.HandleFunc("/videos/{id}", h.GetByID).Methods("GET")
-	api.HandleFunc("/videos/{id}", h.Delete).Methods("DELETE")
+
+	api.HandleFunc("/videos", hVideos.Create).Methods("POST")
+	api.HandleFunc("/jobs/{id}", hJobs.Get).Methods("GET")
+
+	// 404 explícito (útil para depurar rutas)
+	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "route not found: "+r.URL.Path, http.StatusNotFound)
+	})
 
 	addr := ":" + getenv("PORT", "8080")
-	log.Println("API listening on http://localhost" + addr)
+	log.Println("api: listening on", addr)
 	log.Fatal(http.ListenAndServe(addr, r))
 }

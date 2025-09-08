@@ -3,27 +3,56 @@ package async
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 )
 
 const TypeProcessVideo = "video:process"
 
 type ProcessVideoPayload struct {
-	VideoID int    `json:"video_id"`
-	SrcPath string `json:"src_path"`
+	JobID   string `json:"job_id"`
 	UserID  int    `json:"user_id"`
+	Title   string `json:"title"`
+	TmpPath string `json:"tmp_path"`
 }
 
-type Enqueuer struct{ Client *asynq.Client }
+type Enqueuer struct {
+	Client *asynq.Client
+	Redis  *redis.Client
+}
 
 func NewEnqueuer(redisAddr string) *Enqueuer {
-	return &Enqueuer{Client: asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})}
+	return &Enqueuer{
+		Client: asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr}),
+		Redis:  redis.NewClient(&redis.Options{Addr: redisAddr}),
+	}
 }
 
-func (e *Enqueuer) EnqueueProcessVideo(ctx context.Context, p ProcessVideoPayload) (*asynq.TaskInfo, error) {
-	b, _ := json.Marshal(p)
-	t := asynq.NewTask(TypeProcessVideo, b, asynq.MaxRetry(5), asynq.Timeout(15*time.Minute))
-	return e.Client.EnqueueContext(ctx, t, asynq.Queue("videos"))
+func jobKey(jobID string) string { return fmt.Sprintf("jobs:%s:status", jobID) }
+
+func (e *Enqueuer) SetStatus(ctx context.Context, jobID, status string, ttl time.Duration) error {
+	return e.Redis.Set(ctx, jobKey(jobID), status, ttl).Err()
+}
+
+func (e *Enqueuer) GetStatus(ctx context.Context, jobID string) (string, error) {
+	return e.Redis.Get(ctx, jobKey(jobID)).Result()
+}
+
+func (e *Enqueuer) EnqueueVideoProcessing(ctx context.Context, userID int, title, tmpPath string) (string, error) {
+	jobID := uuid.NewString()
+	b, _ := json.Marshal(ProcessVideoPayload{
+		JobID: jobID, UserID: userID, Title: title, TmpPath: tmpPath,
+	})
+	task := asynq.NewTask(TypeProcessVideo, b)
+
+	// 👇 La cola debe llamarse EXACTAMENTE "videos"
+	if _, err := e.Client.EnqueueContext(ctx, task, asynq.Queue("videos")); err != nil {
+		return "", err
+	}
+	_ = e.SetStatus(ctx, jobID, "queued", 24*time.Hour)
+	return jobID, nil
 }
