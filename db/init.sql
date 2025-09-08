@@ -11,13 +11,16 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_anb_user     ON users(id);
 
 CREATE TABLE IF NOT EXISTS videos (
-  id         SERIAL PRIMARY KEY,
-  title      TEXT NOT NULL,
-  url        TEXT NOT NULL,
-  status     TEXT NOT NULL CHECK (status IN ('uploaded','processing','processed','failed')),
-  user_id    INTEGER,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id            SERIAL PRIMARY KEY,
+  title         TEXT NOT NULL,
+  status        TEXT NOT NULL,  -- 'uploaded' | 'processing' | 'processed' | 'failed'
+  uploaded_at   TIMESTAMP NOT NULL,
+  processed_at  TIMESTAMP NULL,
+  origin_url    TEXT NOT NULL,
+  processed_url TEXT,
+  votes         INT NOT NULL DEFAULT 0,
+  user_id       INT NOT NULL
 );
+
 
 CREATE INDEX IF NOT EXISTS idx_anb_video     ON videos(id);

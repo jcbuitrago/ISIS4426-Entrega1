@@ -14,10 +14,11 @@ import (
 const TypeProcessVideo = "video:process"
 
 type ProcessVideoPayload struct {
-	JobID   string `json:"job_id"`
-	UserID  int    `json:"user_id"`
-	Title   string `json:"title"`
-	TmpPath string `json:"tmp_path"`
+	JobID     string `json:"job_id"`
+	VideoID   int    `json:"video_id"`
+	UserID    int    `json:"user_id"`
+	Title     string `json:"title"`
+	InputPath string `json:"input_path"`
 }
 
 type Enqueuer struct {
@@ -45,7 +46,7 @@ func (e *Enqueuer) GetStatus(ctx context.Context, jobID string) (string, error) 
 func (e *Enqueuer) EnqueueVideoProcessing(ctx context.Context, userID int, title, tmpPath string) (string, error) {
 	jobID := uuid.NewString()
 	b, _ := json.Marshal(ProcessVideoPayload{
-		JobID: jobID, UserID: userID, Title: title, TmpPath: tmpPath,
+		JobID: jobID, UserID: userID, Title: title, InputPath: tmpPath,
 	})
 	task := asynq.NewTask(TypeProcessVideo, b)
 

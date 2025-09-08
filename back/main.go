@@ -6,7 +6,10 @@ import (
 	"os"
 
 	"ISIS4426-Entrega1/app/async"
+	"ISIS4426-Entrega1/app/repos"
 	"ISIS4426-Entrega1/app/routers"
+	"ISIS4426-Entrega1/app/services"
+	appdb "ISIS4426-Entrega1/db"
 
 	"github.com/gorilla/mux"
 )
@@ -19,28 +22,27 @@ func getenv(k, d string) string {
 }
 
 func main() {
-	// DB
+	sqlDB := appdb.MustOpen()
+	repo := repos.NewVideoRepoPG(sqlDB)
+	svc := services.NewVideoService(repo)
 
-	// Redis / Enqueuer
-	redis := getenv("REDIS_ADDR", "redis:6379")
-	enq := async.NewEnqueuer(redis)
+	enq := async.NewEnqueuer(getenv("REDIS_ADDR", "redis:6379"))
 	defer enq.Client.Close()
 
-	// Handlers
-	hVideos := routers.NewVideosHandler(enq) // solo encola
+	h := routers.NewVideosHandler(enq, svc)
 	hJobs := routers.NewJobsHandler(enq)
 
-	// Router
 	r := mux.NewRouter()
 	api := r.PathPrefix("/api").Subrouter()
 
-	api.HandleFunc("/videos", hVideos.Create).Methods("POST")
-	api.HandleFunc("/jobs/{id}", hJobs.Get).Methods("GET")
+	api.HandleFunc("/videos", h.Create).Methods("POST")
+	api.HandleFunc("/videos", h.List).Methods("GET") // general o ?user_id=
+	api.HandleFunc("/videos/{id}", h.GetByID).Methods("GET")
+	api.HandleFunc("/videos/{id}", h.Delete).Methods("DELETE")
 
-	// 404 explícito (útil para depurar rutas)
-	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "route not found: "+r.URL.Path, http.StatusNotFound)
-	})
+	api.HandleFunc("/jobs/{id}", hJobs.Get).Methods("GET")
+	fs := http.FileServer(http.Dir("/data"))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
 
 	addr := ":" + getenv("PORT", "8080")
 	log.Println("api: listening on", addr)

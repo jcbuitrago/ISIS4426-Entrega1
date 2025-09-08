@@ -18,9 +18,12 @@ services:
 
   redis:
     image: redis:7
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
-    # ports: ["6380:6379"]   # opcional si quieres verlo fuera de docker
-    volumes: [redisdata:/data]
+    # Opcional: expón a host si quieres inspeccionarlo fuera de Docker
+    # ports: ["6380:6379"]   # host:container
+    volumes:
+      - redisdata:/data
     networks: [app-backend]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -38,32 +41,34 @@ services:
     networks: [app-backend]
 
   api:
+    platform: linux/amd64
     build:
       context: ./back
-      dockerfile: Dockerfile
-      args:
-        PKG: .                 # compila main.go en la raíz de back
+      dockerfile: Dockerfile.api
     image: anb-showcase-backend:api
     container_name: backend
     environment:
       DB_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_ADDR: redis:6379
       PORT: "8080"
-    volumes:
-      - videodata:/data
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
-    ports: ["8080:8080"]
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - videodata:/data         # API guarda /data/uploads
     networks: [app-backend]
     restart: unless-stopped
 
   worker:
+    platform: linux/amd64
     build:
       context: ./back
-      dockerfile: Dockerfile
-      args:
-        PKG: ./cmd/worker      # compila el main.go del worker
+      dockerfile: Dockerfile.worker
     image: anb-showcase-backend:worker
     container_name: worker
     environment:
@@ -73,10 +78,32 @@ services:
       - videodata:/data
       - ./assets:/assets:ro
     depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks: [app-backend]
     restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile.front
+      args:
+        VITE_API_BASE_URL: "http://api:8080"
+    image: anb-showcase-frontend:latest
+    container_name: frontend
+    depends_on:
+      api:
+        condition: service_started
+    networks: [app-backend]
+    ports:
+      - "3000:8080"
+    restart: unless-stopped
+
+
+
+
 
 networks:
   app-backend:
