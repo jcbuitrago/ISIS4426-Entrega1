@@ -2,13 +2,14 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import SiteHeader from "../components/SiteHeader.jsx";
 import SiteFooter from "../components/SiteFooter.jsx";
+import { api } from "../api.js";
 
 export default function RegisterPage({
-  onSubmitRegister = async ({ fullName, email, password, accept }) => {
-    // TODO: conectar al backend (ejemplo):
-    // const res = await fetch("/api/auth/register", { method: "POST", body: JSON.stringify({ fullName, email, password, accept }) });
-    // if (!res.ok) throw new Error("No se pudo crear la cuenta");
-    console.log("register", { fullName, email, accept });
+  onSubmitRegister = async ({ fullName, email, password, city, country }) => {
+    const [first_name, ...rest] = fullName.trim().split(/\s+/);
+    const last_name = rest.join(" ");
+    const data = await api.signup({ first_name, last_name, email, password1: password, password2: password, city, country });
+    return data;
   },
 }) {
   const navigate = useNavigate();
@@ -16,6 +17,8 @@ export default function RegisterPage({
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
+  const [city, setCity] = React.useState("");
+  const [country, setCountry] = React.useState("");
   const [accept, setAccept] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -28,8 +31,8 @@ export default function RegisterPage({
 
     setLoading(true);
     try {
-      await onSubmitRegister({ fullName, email, password, accept });
-      navigate("/login"); // TODO: o navegar directo al dashboard si haces login automático
+      await onSubmitRegister({ fullName, email, password, city, country, accept });
+      navigate("/login");
     } catch (err) {
       setError(err?.message || "Ocurrió un error al crear la cuenta.");
     } finally {
@@ -74,6 +77,31 @@ export default function RegisterPage({
                         placeholder="Tu nombre y apellido"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="row g-3">
+                    <div className="col-12 col-md-6">
+                      <label className="form-label text-secondary">Ciudad</label>
+                      <input
+                        type="text"
+                        className="form-control bg-dark text-white border-secondary-subtle"
+                        placeholder="Tu ciudad"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label text-secondary">País</label>
+                      <input
+                        type="text"
+                        className="form-control bg-dark text-white border-secondary-subtle"
+                        placeholder="Tu país"
+                        value={country}
+                        onChange={(e) => setCountry(e.target.value)}
                         required
                       />
                     </div>

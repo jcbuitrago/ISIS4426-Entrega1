@@ -15,6 +15,28 @@ type PublicHandler struct{ DB *sql.DB }
 
 func NewPublicHandler(db *sql.DB) *PublicHandler { return &PublicHandler{DB: db} }
 
+// GET /api/public/my-votes (JWT)
+func (h *PublicHandler) MyVotes(w http.ResponseWriter, r *http.Request) {
+	uid, ok := middleware.UserIDFromContext(r.Context())
+	if !ok { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
+	rows, err := h.DB.Query(`SELECT video_id FROM votes WHERE user_id=$1`, uid)
+	if err != nil { http.Error(w, "db error", http.StatusInternalServerError); return }
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil { http.Error(w, "db error", http.StatusInternalServerError); return }
+		ids = append(ids, id)
+	}
+	type resp struct { VideoIDs []int `json:"video_ids"`; Used int `json:"used"`; Remaining int `json:"remaining"` }
+	used := len(ids)
+	if used < 0 { used = 0 }
+	rem := 2 - used
+	if rem < 0 { rem = 0 }
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp{VideoIDs: ids, Used: used, Remaining: rem})
+}
+
 // GET /api/public/videos
 func (h *PublicHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -24,7 +46,7 @@ func (h *PublicHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 	if offset < 0 { offset = 0 }
 
 	const qsql = `
-	SELECT v.id, v.title, v.processed_url, v.votes, u.first_name, u.last_name, u.city
+	SELECT v.id, v.title, v.processed_url, v.thumb_url, v.votes, u.first_name, u.last_name, u.city
 	FROM videos v
 	JOIN users u ON u.id = v.user_id
 	WHERE v.status = 'processed' AND v.processed_url IS NOT NULL
@@ -37,6 +59,7 @@ func (h *PublicHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 		VideoID      int    `json:"video_id"`
 		Title        string `json:"title"`
 		ProcessedURL string `json:"processed_url"`
+		ThumbURL     string `json:"thumb_url"`
 		Votes        int    `json:"votes"`
 		Author       string `json:"author"`
 		City         string `json:"city"`
@@ -45,7 +68,7 @@ func (h *PublicHandler) ListVideos(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var it item
 		var fn, ln string
-		if err := rows.Scan(&it.VideoID, &it.Title, &it.ProcessedURL, &it.Votes, &fn, &ln, &it.City); err != nil {
+		if err := rows.Scan(&it.VideoID, &it.Title, &it.ProcessedURL, &it.ThumbURL, &it.Votes, &fn, &ln, &it.City); err != nil {
 			http.Error(w, "db error", http.StatusInternalServerError); return
 		}
 		it.Author = fn + " " + ln
@@ -67,18 +90,23 @@ func (h *PublicHandler) Vote(w http.ResponseWriter, r *http.Request) {
 	if err != nil { http.Error(w, "tx error", http.StatusInternalServerError); return }
 	defer tx.Rollback()
 
-	// insertar voto si no existe
+	var totalUserVotes int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM votes WHERE user_id=$1`, uid).Scan(&totalUserVotes); err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError); return
+	}
+	if totalUserVotes >= 2 {
+		http.Error(w, "Has alcanzado el límite de 2 votos.", http.StatusBadRequest); return
+	}
+
 	if _, err := tx.Exec(`INSERT INTO votes(video_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, vid, uid); err != nil {
 		http.Error(w, "db error", http.StatusInternalServerError); return
 	}
-	// verificar que realmente insertó
 	var cnt int
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM votes WHERE video_id=$1 AND user_id=$2`, vid, uid).Scan(&cnt); err != nil {
 		http.Error(w, "db error", http.StatusInternalServerError); return
 	}
 	if cnt == 0 { http.Error(w, "Ya has votado por este video.", http.StatusBadRequest); return }
 
-	// incrementar contador
 	if _, err := tx.Exec(`UPDATE videos SET votes = votes + 1 WHERE id=$1`, vid); err != nil {
 		http.Error(w, "db error", http.StatusInternalServerError); return
 	}
@@ -86,6 +114,31 @@ func (h *PublicHandler) Vote(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Voto registrado exitosamente."})
+}
+
+// DELETE /api/public/videos/{id}/vote (JWT)
+func (h *PublicHandler) Unvote(w http.ResponseWriter, r *http.Request) {
+	uid, ok := middleware.UserIDFromContext(r.Context())
+	if !ok { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
+	idStr := mux.Vars(r)["id"]
+	vid, err := strconv.Atoi(idStr)
+	if err != nil || vid <= 0 { http.Error(w, "id inválido", http.StatusBadRequest); return }
+
+	tx, err := h.DB.Begin()
+	if err != nil { http.Error(w, "tx error", http.StatusInternalServerError); return }
+	defer tx.Rollback()
+
+	res, err := tx.Exec(`DELETE FROM votes WHERE video_id=$1 AND user_id=$2`, vid, uid)
+	if err != nil { http.Error(w, "db error", http.StatusInternalServerError); return }
+	affected, _ := res.RowsAffected()
+	if affected == 0 { http.Error(w, "No habías votado este video.", http.StatusBadRequest); return }
+
+	if _, err := tx.Exec(`UPDATE videos SET votes = GREATEST(votes - 1, 0) WHERE id=$1`, vid); err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError); return }
+	if err := tx.Commit(); err != nil { http.Error(w, "tx error", http.StatusInternalServerError); return }
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Voto retirado."})
 }
 
 // GET /api/public/rankings?city=...

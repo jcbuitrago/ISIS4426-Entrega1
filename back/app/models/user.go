@@ -9,6 +9,7 @@ type User struct {
 	Email        string    `json:"email"`
 	City         string    `json:"city"`
 	Country      string    `json:"country"`
+	AvatarURL    string    `json:"avatar_url,omitempty"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
 }

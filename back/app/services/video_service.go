@@ -22,6 +22,7 @@ type VideoRepo interface {
 	Delete(ctx context.Context, id int) error
 	UpdateStatus(ctx context.Context, id int, status models.VideoStatus, updatedAt time.Time) error
 	UpdateProcessedURL(ctx context.Context, id int, url string, updatedAt time.Time) error
+	UpdateThumbURL(ctx context.Context, id int, url string, updatedAt time.Time) error
 }
 
 type VideoService struct{ repo VideoRepo }
@@ -82,4 +83,8 @@ func (s *VideoService) Delete(ctx context.Context, id int) error {
 
 func (s *VideoService) UpdateProcessedURL(ctx context.Context, id int, url string) error {
 	return s.repo.UpdateProcessedURL(ctx, id, url, time.Now())
+}
+
+func (s *VideoService) UpdateThumbURL(ctx context.Context, id int, url string) error {
+	return s.repo.UpdateThumbURL(ctx, id, url, time.Now())
 }

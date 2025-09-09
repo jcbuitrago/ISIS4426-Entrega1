@@ -46,6 +46,13 @@ func main() {
 	api.HandleFunc("/auth/signup", authH.Signup).Methods("POST")
 	api.HandleFunc("/auth/login", authH.Login).Methods("POST")
 
+	// profile routes (protected)
+	me := api.PathPrefix("").Subrouter()
+	me.Use(middleware.AuthRequired)
+	me.HandleFunc("/me", authH.Me).Methods("GET")
+	me.HandleFunc("/me", authH.UpdateMe).Methods("PUT")
+	me.HandleFunc("/me/avatar", authH.UploadAvatar).Methods("POST")
+
 	// protected videos
 	videos := api.PathPrefix("/videos").Subrouter()
 	videos.Use(middleware.AuthRequired)
@@ -62,6 +69,10 @@ func main() {
 	vote := api.PathPrefix("/public/videos").Subrouter()
 	vote.Use(middleware.AuthRequired)
 	vote.HandleFunc("/{id}/vote", pubH.Vote).Methods("POST")
+	vote.HandleFunc("/{id}/vote", pubH.Unvote).Methods("DELETE")
+	my := api.PathPrefix("/public").Subrouter()
+	my.Use(middleware.AuthRequired)
+	my.HandleFunc("/my-votes", pubH.MyVotes).Methods("GET")
 	api.HandleFunc("/public/rankings", pubH.Rankings).Methods("GET")
 
 	// static files

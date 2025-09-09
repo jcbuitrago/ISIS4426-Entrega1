@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_name     VARCHAR(50)  NOT NULL,
     city          VARCHAR(50)  NOT NULL,
     country       VARCHAR(50)  NOT NULL,
+    avatar_url    TEXT         NULL,
     email         VARCHAR(120) NOT NULL UNIQUE,
     password_hash TEXT         NOT NULL,
     created_at    TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS videos (
   processed_at  TIMESTAMP   NULL,
   origin_url    TEXT        NOT NULL,
   processed_url TEXT        NULL,
+  thumb_url     TEXT        NULL,
   votes         INT         NOT NULL DEFAULT 0,
   user_id       INT         NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );

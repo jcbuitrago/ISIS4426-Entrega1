@@ -1,38 +1,65 @@
 import React from "react";
 import SiteHeader from "../components/SiteHeader.jsx";
 import SiteFooter from "../components/SiteFooter.jsx";
+import { api } from "../api.js";
 
 /**
  * RankingPage
- * TODO:
- * - GET /api/ranking?limit=&page=
- * - Ordenar/filtrar por categoría/edad/posición
  */
 export default function RankingPage() {
-  const rows = [
-    { rank: 1,  name: "Ethan Carter",      city: "Springfield", score: 1250 },
-    { rank: 2,  name: "Olivia Bennett",    city: "Riverside",   score: 1180 },
-    { rank: 3,  name: "Noah Thompson",     city: "Oakwood",     score: 1120 },
-    { rank: 4,  name: "Sophia Davis",      city: "Greenfield",  score: 1050 },
-    { rank: 5,  name: "Liam Wilson",       city: "Maplewood",   score: 980  },
-    { rank: 6,  name: "Ava Martinez",      city: "Hillcrest",   score: 920  },
-    { rank: 7,  name: "Jackson Anderson",  city: "Westwood",    score: 850  },
-    { rank: 8,  name: "Isabella Taylor",   city: "Northwood",   score: 780  },
-    { rank: 9,  name: "Lucas Thomas",      city: "Southwood",   score: 720  },
-    { rank: 10, name: "Mia Jackson",       city: "Eastwood",    score: 650  },
-  ];
+  const [rows, setRows] = React.useState([]);
+  const [city, setCity] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
 
-  const highlightRank = (rank) => (rank === 1 ? "text-success fw-bold" : "text-white");
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await api.rankings({ city: city || undefined });
+      const mapped = (data || []).map((r) => ({
+        rank: r.position,
+        name: r.username,
+        city: r.city,
+        score: r.votes,
+      }));
+      setRows(mapped);
+    } catch (e) {
+      setError(e?.message || "No se pudo cargar el ranking");
+    } finally {
+      setLoading(false);
+    }
+  }, [city]);
+
+  React.useEffect(() => { load(); }, [load]);
 
   return (
     <div className="bg-dark text-light min-vh-100 d-flex flex-column">
       <SiteHeader />
 
       <main className="container py-5">
-        <div className="mb-4">
-          <h1 className="display-6 fw-bold">Ranking de Jugadores</h1>
-          <p className="text-secondary">Clasificación actualizada de los mejores talentos emergentes.</p>
+        <div className="mb-4 d-flex flex-column flex-md-row align-items-md-end gap-3 justify-content-between">
+          <div>
+            <h1 className="display-6 fw-bold">Ranking de Jugadores</h1>
+            <p className="text-secondary">Clasificación actualizada de los mejores talentos emergentes.</p>
+          </div>
+          <div className="d-flex align-items-end gap-2">
+            <div>
+              <label className="form-label text-secondary">Filtrar por ciudad</label>
+              <input
+                type="text"
+                className="form-control bg-black text-white border-secondary-subtle"
+                placeholder="Ciudad (opcional)"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              />
+            </div>
+            <button className="btn btn-outline-light mt-4" onClick={load}>Aplicar</button>
+          </div>
         </div>
+
+        {loading && <p className="text-center text-secondary">Cargando…</p>}
+        {error && <div className="alert alert-danger">{error}</div>}
 
         <div className="border rounded-4 border-secondary-subtle bg-black">
           <div className="table-responsive">
@@ -51,10 +78,10 @@ export default function RankingPage() {
                     <td className={`text-center fs-5 ${r.rank === 1 ? "text-success" : ""}`}>{r.rank}</td>
                     <td className="fw-semibold">{r.name}</td>
                     <td className="text-secondary">{r.city}</td>
-                    <td className="text-end fw-semibold">{r.score.toLocaleString()}</td>
+                    <td className="text-end fw-semibold">{Number(r.score || 0).toLocaleString()}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && (
+                {!loading && rows.length === 0 && (
                   <tr>
                     <td colSpan={4} className="text-center text-secondary py-4">No hay datos de ranking.</td>
                   </tr>

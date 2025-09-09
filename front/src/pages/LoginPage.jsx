@@ -2,27 +2,18 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import SiteHeader from "../components/SiteHeader.jsx";
 import SiteFooter from "../components/SiteFooter.jsx";
+import { api } from "../api.js";
 
 export default function LoginPage({
   onSubmitLogin = async ({ username, password, remember }) => {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: username, password }),
-    });
-    if (!res.ok) {
-      let msg = "Credenciales inválidas";
-      try { const txt = await res.text(); if (txt) msg = txt; } catch {}
-      throw new Error(msg);
-    }
-    const data = await res.json();
+    const data = await api.login({ email: username, password, remember });
     if (data?.access_token) {
       localStorage.setItem("access_token", data.access_token);
       if (data.expires_in) {
         const expAt = Date.now() + Number(data.expires_in) * 1000;
         localStorage.setItem("access_token_expires_at", String(expAt));
       }
-      if (remember) localStorage.setItem("remember_me", "1");
+      if (remember) localStorage.setItem("remember_me", "1"); else localStorage.removeItem("remember_me");
     }
   },
   onForgotPassword = () => {}, // TODO: navegación/flujo recuperar

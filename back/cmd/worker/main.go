@@ -46,12 +46,18 @@ func handleProcessVideo(svc *services.VideoService, enq *async.Enqueuer) asynq.H
 		intro720 := filepath.Join(work, "intro_720.mp4")
 		outro720 := filepath.Join(work, "outro_720.mp4")
 		final := filepath.Join("/data", "processed", fmt.Sprintf("%d_final.mp4", p.VideoID))
+		thumb := filepath.Join("/data", "processed", fmt.Sprintf("%d_thumb.jpg", p.VideoID))
 
 		_ = os.MkdirAll(filepath.Dir(final), 0o775)
 
 		// 1) Trim
 		if err := run(trimTo30(input, mainTrim)); err != nil {
 			_ = enq.SetStatus(ctx, p.JobID, "failed:trim", 24*time.Hour)
+			return err
+		}
+		// 1.5) Extraer thumbnail del primer frame del original
+		if err := run(extractThumbnail(input, thumb)); err != nil {
+			_ = enq.SetStatus(ctx, p.JobID, "failed:thumb", 24*time.Hour)
 			return err
 		}
 		// 2) Scale main
@@ -92,6 +98,12 @@ func handleProcessVideo(svc *services.VideoService, enq *async.Enqueuer) asynq.H
 		publicURL := fmt.Sprintf("/static/processed/%d_final_noaudio.mp4", p.VideoID)
 		if err := svc.UpdateProcessedURL(ctx, p.VideoID, publicURL); err != nil {
 			_ = enq.SetStatus(ctx, p.JobID, "failed:update_processed_url", 24*time.Hour)
+			return err
+		}
+		// persistir thumbnail url
+		thumbURL := fmt.Sprintf("/static/processed/%d_thumb.jpg", p.VideoID)
+		if err := svc.UpdateThumbURL(ctx, p.VideoID, thumbURL); err != nil {
+			_ = enq.SetStatus(ctx, p.JobID, "failed:update_thumb_url", 24*time.Hour)
 			return err
 		}
 		if err := svc.UpdateStatus(ctx, p.VideoID, models.StatusProcessed); err != nil {

@@ -23,3 +23,8 @@ func concatIntroMainOutro(intro, main, outro, out string) *exec.Cmd {
 	_ = os.WriteFile(tmpList, []byte(list), 0o644)
 	return exec.Command("ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", tmpList, "-c", "copy", out)
 }
+
+func extractThumbnail(in, out string) *exec.Cmd {
+	// Toma el primer frame (0 segundo) del video original
+	return exec.Command("ffmpeg", "-y", "-i", in, "-ss", "00:00:00", "-vframes", "1", out)
+}

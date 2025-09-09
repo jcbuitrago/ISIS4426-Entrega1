@@ -15,11 +15,17 @@ import (
 type UserRepo interface {
 	Create(ctx context.Context, u models.User) (models.User, error)
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	GetByID(ctx context.Context, id int) (*models.User, error)
+	UpdateProfile(ctx context.Context, id int, firstName, lastName, city, country string) error
+	UpdateAvatar(ctx context.Context, id int, url string) error
 }
 
 type AuthService struct{ users UserRepo }
 
 func NewAuthService(r UserRepo) *AuthService { return &AuthService{users: r} }
+
+// Expose underlying repo for profile handlers
+func (a *AuthService) Users() UserRepo { return a.users }
 
 var (
 	ErrEmailExists      = errors.New("email ya registrado")
@@ -50,7 +56,7 @@ func (a *AuthService) Signup(ctx context.Context, first, last, email, city, coun
 	return a.users.Create(ctx, u)
 }
 
-func (a *AuthService) Login(ctx context.Context, email, password string) (string, time.Time, error) {
+func (a *AuthService) Login(ctx context.Context, email, password string, remember bool) (string, time.Time, error) {
 	u, err := a.users.GetByEmail(ctx, email)
 	if err != nil {
 		return "", time.Time{}, ErrInvalidCreds
@@ -62,7 +68,12 @@ func (a *AuthService) Login(ctx context.Context, email, password string) (string
 	if secret == "" {
 		secret = "devsecret123"
 	}
-	exp := time.Now().Add(1 * time.Hour)
+	// session TTL: 1h default, 7d if remember
+	ttl := time.Hour
+	if remember {
+		ttl = 7 * 24 * time.Hour
+	}
+	exp := time.Now().Add(ttl)
 	claims := jwt.MapClaims{
 		"user_id": u.ID,
 		"email":   u.Email,

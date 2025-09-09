@@ -46,7 +46,7 @@ export default function LandingPage({
                 className="btn btn-primary btn-lg fw-bold"
                 onClick={() => {
                   onViewTalents();   // placeholder lógica
-                  navigate("/talentos"); // si aún no existe, deja el navigate para futuro
+                  navigate("/galeria"); // si aún no existe, deja el navigate para futuro
                 }}
               >
                 Ver Talentos

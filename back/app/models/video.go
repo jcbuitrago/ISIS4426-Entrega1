@@ -19,6 +19,7 @@ type Video struct {
 	ProcessedAt  time.Time   `json:"processed_at,omitempty"`
 	OriginURL    string      `json:"origin_url,omitempty"`
 	ProcessedURL string      `json:"processed_url,omitempty"`
+	ThumbURL     string      `json:"thumb_url,omitempty"`
 	Votes        int         `json:"votes"`
 	UserID       int         `json:"user_id,omitempty"`
 }
