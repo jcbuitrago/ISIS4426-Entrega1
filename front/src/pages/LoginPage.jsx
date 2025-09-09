@@ -5,10 +5,25 @@ import SiteFooter from "../components/SiteFooter.jsx";
 
 export default function LoginPage({
   onSubmitLogin = async ({ username, password, remember }) => {
-    // TODO: conectar al backend (ejemplo):
-    // const res = await fetch("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password, remember }) });
-    // if (!res.ok) throw new Error("Credenciales inválidas");
-    console.log("login", { username, remember });
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: username, password }),
+    });
+    if (!res.ok) {
+      let msg = "Credenciales inválidas";
+      try { const txt = await res.text(); if (txt) msg = txt; } catch {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    if (data?.access_token) {
+      localStorage.setItem("access_token", data.access_token);
+      if (data.expires_in) {
+        const expAt = Date.now() + Number(data.expires_in) * 1000;
+        localStorage.setItem("access_token_expires_at", String(expAt));
+      }
+      if (remember) localStorage.setItem("remember_me", "1");
+    }
   },
   onForgotPassword = () => {}, // TODO: navegación/flujo recuperar
 }) {
@@ -25,7 +40,7 @@ export default function LoginPage({
     setLoading(true);
     try {
       await onSubmitLogin({ username, password, remember });
-      navigate("/"); // TODO: redirigir a dashboard o donde quieras
+      navigate("/dashboard");
     } catch (err) {
       setError(err?.message || "Ocurrió un error al iniciar sesión.");
     } finally {

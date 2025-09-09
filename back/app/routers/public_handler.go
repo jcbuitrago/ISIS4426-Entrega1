@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"ISIS4426-Entrega1/app/middleware"
-	"ISIS4426-Entrega1/app/repos"
 
 	"github.com/gorilla/mux"
 )

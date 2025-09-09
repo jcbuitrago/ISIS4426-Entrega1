@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"ISIS4426-Entrega1/app/models"
-	"ISIS4426-Entrega1/app/repos"
 
 	"golang.org/x/crypto/bcrypt"
 	"github.com/golang-jwt/jwt/v5"
@@ -32,6 +31,7 @@ func (a *AuthService) Signup(ctx context.Context, first, last, email, city, coun
 	if password1 != password2 {
 		return models.User{}, ErrPasswordsNoMatch
 	}
+	// si ya existe, devuelve ErrEmailExists (ignoramos el detalle del repo)
 	if _, err := a.users.GetByEmail(ctx, email); err == nil {
 		return models.User{}, ErrEmailExists
 	}

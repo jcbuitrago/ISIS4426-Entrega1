@@ -1,6 +1,6 @@
 module ISIS4426-Entrega1
 
-go 1.24.6
+go 1.23
 
 require github.com/gorilla/mux v1.8.1
 require github.com/gorilla/handlers v1.5.1

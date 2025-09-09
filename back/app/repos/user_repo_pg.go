@@ -36,6 +36,9 @@ func (r *UserRepoPG) GetByEmail(ctx context.Context, email string) (*models.User
 	var u models.User
 	err := r.DB.QueryRowContext(ctx, q, email).Scan(&u.ID, &u.FirstName, &u.LastName, &u.City, &u.Country, &u.Email, &u.PasswordHash, &u.CreatedAt)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
 		return nil, err
 	}
 	return &u, nil

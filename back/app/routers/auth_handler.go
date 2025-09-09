@@ -2,7 +2,9 @@ package routers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 
 	"ISIS4426-Entrega1/app/services"
 )
@@ -23,22 +25,20 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 	var body req
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "json inválido", http.StatusBadRequest)
-		return
+		http.Error(w, "json inválido", http.StatusBadRequest); return
 	}
 	u, err := h.svc.Signup(r.Context(), body.FirstName, body.LastName, body.Email, body.City, body.Country, body.Password1, body.Password2)
 	if err != nil {
 		switch err {
 		case services.ErrPasswordsNoMatch:
 			http.Error(w, "contraseñas no coinciden", http.StatusBadRequest)
-			return
 		case services.ErrEmailExists:
 			http.Error(w, "email ya registrado", http.StatusBadRequest)
-			return
 		default:
+			log.Printf("signup error: %v", err)
 			http.Error(w, "error interno", http.StatusInternalServerError)
-			return
 		}
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -57,18 +57,22 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	var body req
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "json inválido", http.StatusBadRequest)
-		return
+		http.Error(w, "json inválido", http.StatusBadRequest); return
 	}
 	tok, exp, err := h.svc.Login(r.Context(), body.Email, body.Password)
 	if err != nil {
-		http.Error(w, "credenciales inválidas", http.StatusUnauthorized)
+		if err == services.ErrInvalidCreds {
+			http.Error(w, "credenciales inválidas", http.StatusUnauthorized)
+			return
+		}
+		log.Printf("login error: %v", err)
+		http.Error(w, "error interno", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"access_token": tok,
 		"token_type":   "Bearer",
-		"expires_in":   int(exp.Sub(exp.Add(-1 * (exp.Sub(exp)))) .Seconds()), // 3600
+		"expires_in":   int(time.Until(exp).Seconds()),
 	})
 }

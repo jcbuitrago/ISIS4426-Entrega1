@@ -23,11 +23,12 @@ func UserIDFromContext(ctx context.Context) (int, bool) {
 func AuthRequired(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
-		if auth == "" || !strings.HasPrefix(strings.ToLower(auth), "bearer ") {
+		parts := strings.Fields(auth) // separa por espacios múltiples
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 			http.Error(w, "token faltante", http.StatusUnauthorized)
 			return
 		}
-		tokenStr := strings.TrimSpace(auth[len("Bearer "):])
+		tokenStr := parts[1]
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
 			secret = "devsecret123"
