@@ -1,3 +1,30 @@
 todo.go
 
 node_modules
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Output of the go coverage tool
+*.coverprofile
+
+# Logs
+*.log
+
+# Dependency directories
+vendor/
+
+# IDEs
+.vscode/
+.idea/
+
+# Docker and others
+.env
+*.env
+docker-compose.override.yml
