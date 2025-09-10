@@ -5,7 +5,7 @@
 |Francisco Santamaría|F.santamaria@uniandes.edu.co|202022134|
 |David Octavio Ibarra Muñoz| d.ibarra@uniandes.edu.co| 202014446|
 |Luis Fernando Ruiz| lf.ruizo1@uniandes.edu.co| 202211513|
-|Juan Camilo Buitrago|Jc.buitragoa1@uniandes.edu.co | 201729194|
+|Juan Camilo Buitrago Ariza|Jc.buitragoa1@uniandes.edu.co | 201729194|
 
 # ANB Showcase — Plataforma de videos con procesamiento asíncrono
 
