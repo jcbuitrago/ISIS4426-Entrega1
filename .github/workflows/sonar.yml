@@ -11,6 +11,12 @@ jobs:
     name: SonarQube Scan
     runs-on: self-hosted
     steps:
+      - name: Check SonarQube Status
+        run: |
+          echo "Checking SonarQube availability..."
+          timeout 60 bash -c 'while ! curl -s http://localhost:9000 > /dev/null; do sleep 1; done'
+          echo "SonarQube is running"
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -31,3 +37,9 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: http://localhost:9000
+
+      - name: Report Status
+        if: always()
+        run: |
+          echo "Workflow completed"
+          echo "Check SonarQube results at http://localhost:9000/dashboard"
