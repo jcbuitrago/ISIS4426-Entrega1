@@ -7,9 +7,16 @@ ENV CGO_ENABLED=0
 RUN go build -trimpath -ldflags="-s -w" -o /app/api ./main.go
 
 FROM alpine:3.20
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 WORKDIR /app
 RUN apk add --no-cache ca-certificates
 COPY --from=build --chmod=755 /app/api /app/api
+
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
 ENV PORT=8080
 EXPOSE 8080
 ENTRYPOINT ["/app/api"]
