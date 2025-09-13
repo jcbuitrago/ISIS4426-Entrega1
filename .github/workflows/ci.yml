@@ -1,4 +1,4 @@
-name: Basic CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
 
 jobs:
   deploy:
+    name: Build and Deploy
     runs-on: self-hosted
     
     steps:
@@ -14,20 +15,63 @@ jobs:
 
       - name: Environment Check
         run: |
-          echo "Checking environment..."
-          echo "Working Directory: $(pwd)"
-          echo "Runner OS: ${{ runner.os }}"
-          echo "Runner Name: ${{ runner.name }}"
+          echo "Pre-deployment checks"
+          echo "Working Directory: ${{ github.workspace}}"
+          docker info
+          docker-compose version
+
+      - name: Build Application
+        run: |
+          echo "Building Application"
+          docker-compose build --no-cache
+          echo "Build completed"
+
+      - name: Run Health Checks
+        run : |
+          echo "Running Health Checks"
+          docker-compose config -q
+          echo "Configuration validated"
 
       - name: Deploy Application
         run: |
           echo "Starting deployment..."
-          docker-compose down
-          docker-compose up -d --build
+          docker-compose down --remove-orphans
+          docker-compose up -d
           echo "Deployment completed"
 
       - name: Verify Deployment
         run: |
-          echo "Verifying containers..."
-          docker ps
-          echo "Deployment verification completed"
+          echo "Verifying Deployment"
+          echo "Waiting for services to stabilize..."
+          sleep 30
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+      - name: Health Check
+        run: |
+          echo "Checking Services Health"
+
+          echo "Checking SonarQube..."
+          timeout 60 bash -c 'while ! curl -s http://localhost:9000 > /dev/null; do sleep 1; done'
+          echo "SonarQube is healthy"
+
+          echo "Checking Backend API..."
+          timeout 60 bash -c 'while ! curl -s http://localhost:8080/health > /dev/null; de sleep 1; done'
+          echo "Backend API is healthy"
+
+          echo "Checking Redis..."
+          timeout 30 bash -c 'docker exec $(docker ps -q -f name=redis) redis-cli ping | grep -q "PONG"'
+          echo "Redis is healthy"
+
+          echo "Checking Frontend..."
+          timeout 30 bash -c 'while ! curl -s http://localhost:3000 > /dev/null; do sleep 1; done'
+          echo "Frontend is healthy"
+
+          echo "All services are healthy"
+
+      - name: Deployment Report
+        if: always()
+        run: |
+          echo "Deployment Status: ${{ job.status }}"
+          echo "Timestamp: $(date). Container Status:"
+          docker-compose ps
+

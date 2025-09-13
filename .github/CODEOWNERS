@@ -1,0 +1,15 @@
+# Backend code
+/back/**/*.go @jcbuitrago @RuizL25 @Pacho2020095 @Octa-Ibarra
+
+# Frontend code
+/front/* @RuizL25
+
+# DevOps & Infrastructure
+/.github/* @jcbuitrago
+/docker-compose.yml @jcbuitrago
+/back/Dockerfile.api @jcbuitrago
+/back/Dockerfile.worker @jcbuitrago
+/front/Dockerfile.front @jcbuitrago
+
+# Documentation
+/README.md @RuizL25
