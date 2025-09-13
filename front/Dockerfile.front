@@ -13,7 +13,7 @@ FROM nginx:1.27-alpine
 RUN addgroup -S appgroup && \
     adduser -S appuser -G appgroup && \
     mkdir -p /var/cache/nginx /var/run/nginx && \
-    chown -R appuser:appgroup nginx /var/cache/nginx /var/run/nginx && \
+    chown -R appuser:appgroup /var/cache/nginx && \
     chown -R appuser:appgroup /var/run/nginx && \
     chown -R appuser:appgroup /usr/share/nginx/html
 
