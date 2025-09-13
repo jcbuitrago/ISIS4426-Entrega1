@@ -17,8 +17,23 @@
     
     # --- runtime ---
     FROM alpine:3.20
+
+    # Create non-root user and set up workspace
+    RUN addgroup -S appgroup && \
+    adduser -S appuser -G appgroup && \
+    mkdir -p /app && \
+    chown -R appuser:appgroup /app
+
     WORKDIR /app
+
+    # Install required packages
     RUN apk add --no-cache ca-certificates ffmpeg
-    COPY --from=build --chmod=755 /app/worker /app/worker
+
+    # Copy binary with correct permissions
+    COPY --from=build --chmod=755 --chown=appuser:appgroup /app/worker /app/worker
+
+    # Swtich to non-root user
+    USER appuser
+
     ENTRYPOINT ["/app/worker"]
     
