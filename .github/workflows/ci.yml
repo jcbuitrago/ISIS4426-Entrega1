@@ -55,7 +55,7 @@ jobs:
           echo "SonarQube is healthy"
 
           echo "Checking Backend API..."
-          timeout 60 bash -c 'while ! curl -s http://localhost:8080/health > /dev/null; de sleep 1; done'
+          timeout 60 bash -c 'while ! curl -s http://localhost:8080/health > /dev/null; do sleep 1; done'
           echo "Backend API is healthy"
 
           echo "Checking Redis..."
