@@ -12,14 +12,15 @@ RUN npm run build
 FROM nginx:1.27-alpine
 RUN addgroup -S appgroup && \
     adduser -S appuser -G appgroup && \
-    mkdir -p /var/cache/nginx /var/run/nginx && \
-    chown -R appuser:appgroup /var/cache/nginx && \
-    chown -R appuser:appgroup /var/run/nginx && \
-    chown -R appuser:appgroup /usr/share/nginx/html
+    mkdir -p /tmp/nginx /var/cache/nginx /var/run/nginx /var/log/nginx /run /usr/share/nginx/html && \
+    chown -R appuser:appgroup /tmp/nginx /var/cache/nginx /var/run/nginx /var/log/nginx \
+                              /run /usr/share/nginx/html /etc/nginx && \
+    # Remove the user directive from nginx.conf
+    sed -i '/user/d' /etc/nginx/nginx.conf
 
 
 # Copia tu config
-COPY --chown=appuser:appgroup ./nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chown=appuser:appgroup ./nginx.conf /etc/nginx/nginx.conf
 
 # Copia el build
 COPY --from=build --chown=appuser:appgroup /app/dist /usr/share/nginx/html
