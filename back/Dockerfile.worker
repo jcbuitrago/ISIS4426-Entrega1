@@ -30,7 +30,7 @@
     RUN apk add --no-cache ca-certificates ffmpeg
 
     # Copy binary with correct permissions
-    COPY --from=build --chmod=755 --chown=appuser:appgroup /app/worker /app/worker
+    COPY --from=build --chmod=755 /app/worker /app/worker
 
     # Swtich to non-root user
     USER appuser
