@@ -4,6 +4,14 @@ This document explains how the application was migrated from a local Docker Comp
 
 ---
 
+## 🗺️ Architecture Diagram
+
+<div align="center">
+
+  <img src="Diagram.svg" alt="Architecture Diagram" width="60%">
+
+</div>
+
 ## 📦 What We Changed
 
 ### 🧱 Split Services Across AWS Components
@@ -119,3 +127,4 @@ This document explains how the application was migrated from a local Docker Comp
 | **SonarQube** | Code analysis dashboard (port 9000)           |
 
 Both run on Frontend EC2 and are secured using security groups.
+
