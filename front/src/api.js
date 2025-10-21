@@ -1,3 +1,15 @@
+// Environment-based API configuration
+const getApiBaseUrl = () => {
+  // In production, use ALB endpoint
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_API_BASE_URL || 'http://anb-alb-1580832969.us-east-1.elb.amazonaws.com';
+  }
+  // In development, use relative URLs (Vite proxy)
+  return '';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
 export function getAccessToken() {
   const tok = localStorage.getItem("access_token");
   const expAt = Number(localStorage.getItem("access_token_expires_at") || 0);
@@ -37,7 +49,7 @@ async function handleJson(res) {
 export const api = {
   // Auth
   async login({ email, password, remember }) {
-    const res = await fetch("/api/auth/login", {
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, remember: !!remember }),
@@ -45,7 +57,7 @@ export const api = {
     return handleJson(res);
   },
   async signup({ first_name, last_name, email, password1, password2, city, country }) {
-    const res = await fetch("/api/auth/signup", {
+    const res = await fetch(`${API_BASE_URL}/api/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ first_name, last_name, email, password1, password2, city, country }),
@@ -55,11 +67,11 @@ export const api = {
 
   // Profile (protected)
   async getMe() {
-    const res = await fetch("/api/me", { headers: { ...authHeaders() } });
+    const res = await fetch(`${API_BASE_URL}/api/me`, { headers: { ...authHeaders() } });
     return handleJson(res);
   },
   async updateMe({ first_name, last_name, city, country }) {
-    const res = await fetch("/api/me", {
+    const res = await fetch(`${API_BASE_URL}/api/me`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ first_name, last_name, city, country }),
@@ -69,7 +81,7 @@ export const api = {
   async uploadAvatar(file) {
     const form = new FormData();
     form.set("avatar", file);
-    const res = await fetch("/api/me/avatar", {
+    const res = await fetch(`${API_BASE_URL}/api/me/avatar`, {
       method: "POST",
       headers: { ...authHeaders() },
       body: form,
@@ -83,7 +95,7 @@ export const api = {
     if (limit) qs.set("limit", String(limit));
     if (offset) qs.set("offset", String(offset));
     if (user_id) qs.set("user_id", String(user_id));
-    const res = await fetch(`/api/videos?${qs.toString()}`,
+    const res = await fetch(`${API_BASE_URL}/api/videos?${qs.toString()}`,
       { headers: { ...authHeaders() } });
     return handleJson(res);
   },
@@ -91,7 +103,7 @@ export const api = {
     const form = new FormData();
     if (title) form.set("title", title);
     form.set("video_file", file);
-    const res = await fetch("/api/videos", {
+    const res = await fetch(`${API_BASE_URL}/api/videos`, {
       method: "POST",
       headers: { ...authHeaders() },
       body: form,
@@ -99,20 +111,20 @@ export const api = {
     return handleJson(res);
   },
   async deleteVideo(id) {
-    const res = await fetch(`/api/videos/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/api/videos/${id}`, {
       method: "DELETE",
       headers: { ...authHeaders() },
     });
     return handleJson(res);
   },
   async getVideo(id) {
-    const res = await fetch(`/api/videos/${id}`, { headers: { ...authHeaders() } });
+    const res = await fetch(`${API_BASE_URL}/api/videos/${id}`, { headers: { ...authHeaders() } });
     return handleJson(res);
   },
 
   // Jobs (public)
   async getJob(id) {
-    const res = await fetch(`/api/jobs/${id}`);
+    const res = await fetch(`${API_BASE_URL}/api/jobs/${id}`);
     return handleJson(res);
   },
 
@@ -121,11 +133,11 @@ export const api = {
     const qs = new URLSearchParams();
     if (limit) qs.set("limit", String(limit));
     if (offset) qs.set("offset", String(offset));
-    const res = await fetch(`/api/public/videos?${qs.toString()}`);
+    const res = await fetch(`${API_BASE_URL}/api/public/videos?${qs.toString()}`);
     return handleJson(res);
   },
   async voteVideo(id) {
-    const res = await fetch(`/api/public/videos/${id}/vote`, {
+    const res = await fetch(`${API_BASE_URL}/api/public/videos/${id}/vote`, {
       method: "POST",
       headers: { ...authHeaders() },
     });
@@ -134,7 +146,7 @@ export const api = {
   async rankings({ city } = {}) {
     const qs = new URLSearchParams();
     if (city) qs.set("city", city);
-    const res = await fetch(`/api/public/rankings?${qs.toString()}`);
+    const res = await fetch(`${API_BASE_URL}/api/public/rankings?${qs.toString()}`);
     return handleJson(res);
   },
 };

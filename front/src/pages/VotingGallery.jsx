@@ -23,7 +23,12 @@ export default function VotingGallery() {
       try {
         const [videos, my] = await Promise.all([
           api.listPublicVideos({ limit: 48, offset: 0 }),
-          fetch('/api/public/my-votes', { headers: { Authorization: `Bearer ${getAccessToken()}` } }).then(r => r.json())
+          // Use api.js instead of hardcoded fetch
+          fetch('/api/public/my-votes', { 
+            headers: { 
+              Authorization: `Bearer ${getAccessToken()}` 
+            } 
+          }).then(r => r.json())
         ]);
         if (!mounted) return;
         const mapped = (videos || []).map((d) => ({
@@ -56,11 +61,24 @@ export default function VotingGallery() {
       alert(e?.message || "No se pudo registrar el voto.");
     }
   };
+  
   const unvote = async (id) => {
     try {
-      await fetch(`/api/public/videos/${id}/vote`, { method: 'DELETE', headers: { Authorization: `Bearer ${getAccessToken()}` } });
+      // Fix: Use api base URL instead of hardcoded path
+      const API_BASE_URL = import.meta.env.PROD ? 
+        (import.meta.env.VITE_API_BASE_URL || 'http://anb-alb-1580832969.us-east-1.elb.amazonaws.com') : '';
+      
+      await fetch(`${API_BASE_URL}/api/public/videos/${id}/vote`, { 
+        method: 'DELETE', 
+        headers: { 
+          Authorization: `Bearer ${getAccessToken()}` 
+        } 
+      });
+      
       setItems((prev) => prev.map((it) => it.id === String(id) ? { ...it, votes: Math.max((it.votes || 0) - 1, 0) } : it));
-      const next = new Set(Array.from(votedIds)); next.delete(String(id)); setVotedIds(next);
+      const next = new Set(Array.from(votedIds)); 
+      next.delete(String(id)); 
+      setVotedIds(next);
       setRemaining((r) => Math.min(r + 1, 2));
     } catch (e) {
       alert(e?.message || "No se pudo retirar el voto.");
