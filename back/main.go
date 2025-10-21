@@ -1,23 +1,27 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
 	"ISIS4426-Entrega1/app/async"
+	"ISIS4426-Entrega1/app/middleware"
 	"ISIS4426-Entrega1/app/repos"
 	"ISIS4426-Entrega1/app/routers"
 	"ISIS4426-Entrega1/app/services"
 	appdb "ISIS4426-Entrega1/db"
-	"ISIS4426-Entrega1/app/middleware"
+	"ISIS4426-Entrega1/internal/s3client"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 )
 
 func getenv(k, d string) string {
-	if v := os.Getenv(k); v != "" { return v }
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
 	return d
 }
 
@@ -29,13 +33,23 @@ func main() {
 	enq := async.NewEnqueuer(getenv("REDIS_ADDR", "redis:6379"))
 	defer enq.Client.Close()
 
+	// Initialize S3 client from SSM parameters
+	s3Client, err := s3client.NewFromSSM(
+		context.Background(),
+		"/anb/s3/uploads-bucket",
+		"/anb/s3/processed-bucket",
+	)
+	if err != nil {
+		log.Fatal("Failed to initialize S3 client:", err)
+	}
+
 	// auth
 	userRepo := repos.NewUserRepoPG(sqlDB)
 	authSvc := services.NewAuthService(userRepo)
-	authH := routers.NewAuthHandler(authSvc)
+	authH := routers.NewAuthHandler(authSvc, s3Client) // Pass S3 client for avatar uploads
 
-	// videos
-	h := routers.NewVideosHandler(enq, svc)
+	// videos - pass S3 client to handler
+	h := routers.NewVideosHandler(enq, svc, s3Client)
 	hJobs := routers.NewJobsHandler(enq)
 	pubH := routers.NewPublicHandler(sqlDB)
 
@@ -75,17 +89,16 @@ func main() {
 	my.HandleFunc("/my-votes", pubH.MyVotes).Methods("GET")
 	api.HandleFunc("/public/rankings", pubH.Rankings).Methods("GET")
 
-	// static files
-	fs := http.FileServer(http.Dir("/data"))
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
-
-	addr := ":" + getenv("PORT", "8080")
-	log.Println("api: listening on", addr)
+	// Remove static file serving - files will be served directly from S3
+	// r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("/data/"))))
 
 	cors := handlers.CORS(
-		handlers.AllowedHeaders([]string{"Authorization", "Content-Type"}),
-		handlers.AllowedMethods([]string{"GET", "POST", "DELETE", "PUT", "OPTIONS"}),
-		handlers.AllowedOrigins([]string{"*"}), // ajustar en prod
+		handlers.AllowedOrigins([]string{"*"}),
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"*"}),
 	)
-	log.Fatal(http.ListenAndServe(addr, cors(r)))
+
+	port := getenv("PORT", "8080")
+	log.Printf("API listening on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, cors(r)))
 }

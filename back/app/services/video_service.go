@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"ISIS4426-Entrega1/app/models"
@@ -29,24 +28,15 @@ type VideoService struct{ repo VideoRepo }
 
 func NewVideoService(r VideoRepo) *VideoService { return &VideoService{repo: r} }
 
-func (s *VideoService) Create(userID int, title, originURL string) (models.Video, error) {
-	if strings.TrimSpace(title) == "" {
-		return models.Video{}, ErrInvalidTitle
-	}
-	if strings.TrimSpace(originURL) == "" {
-		return models.Video{}, ErrInvalidURL
-	}
-	now := time.Now()
-	v := models.Video{
-		Title:       title,
-		OriginURL:   originURL,
-		Status:      models.StatusUploaded,
-		UploadedAt:  now,
-		ProcessedAt: time.Time{}, // aún no procesado
-		UserID:      userID,
-		Votes:       0,
-	}
-	return s.repo.Create(v)
+func (s *VideoService) Create(userID int, title, s3Key string) (models.Video, error) {
+	// Store the S3 key in origin_url field for now
+	// The full S3 URL will be generated when needed
+	return s.repo.Create(context.Background(), models.Video{
+		Title:     title,
+		OriginURL: s3Key, // Store S3 key, not full URL
+		Status:    models.StatusUploaded,
+		UserID:    userID,
+	})
 }
 
 func (s *VideoService) UpdateStatus(ctx context.Context, id int, st models.VideoStatus) error {

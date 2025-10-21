@@ -20,14 +20,14 @@ CREATE TABLE IF NOT EXISTS videos (
   status        TEXT        NOT NULL,        -- 'uploaded' | 'processing' | 'processed' | 'failed'
   uploaded_at   TIMESTAMP   NOT NULL DEFAULT NOW(),
   processed_at  TIMESTAMP   NULL,
-  origin_url    TEXT        NOT NULL,
-  processed_url TEXT        NULL,
-  thumb_url     TEXT        NULL,
+  origin_url    VARCHAR(512)        NOT NULL,
+  processed_url VARCHAR(512)        NULL,
+  thumb_url     VARCHAR(512)        NULL,
   votes         INT         NOT NULL DEFAULT 0,
   user_id       INT         NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_videos_user   ON videos(user_id);
+CREATE INDEX IF NOT EXISTS idx_videos_user_id   ON videos(user_id);
 CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status);
 
 -- VOTES (1 por usuario por video)

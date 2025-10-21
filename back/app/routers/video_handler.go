@@ -3,18 +3,18 @@ package routers
 import (
 	"encoding/json"
 	"errors"
-	"io"
+	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"time"
 
 	"ISIS4426-Entrega1/app/async"
+	"ISIS4426-Entrega1/app/middleware"
 	"ISIS4426-Entrega1/app/models"
 	"ISIS4426-Entrega1/app/repos"
 	"ISIS4426-Entrega1/app/services"
-	"ISIS4426-Entrega1/app/middleware"
+	"ISIS4426-Entrega1/internal/s3client"
 
 	"github.com/gorilla/mux"
 )
@@ -22,15 +22,19 @@ import (
 type VideosHandler struct {
 	enqueuer *async.Enqueuer
 	svc      *services.VideoService
+	s3Client *s3client.S3Client
 }
 
-func NewVideosHandler(enq *async.Enqueuer, svc *services.VideoService) *VideosHandler {
-	return &VideosHandler{enqueuer: enq, svc: svc}
+func NewVideosHandler(e *async.Enqueuer, s *services.VideoService, s3 *s3client.S3Client) *VideosHandler {
+	return &VideosHandler{enqueuer: e, svc: s, s3Client: s3}
 }
 
 func (h *VideosHandler) Create(w http.ResponseWriter, r *http.Request) {
 	uid, ok := middleware.UserIDFromContext(r.Context())
-	if !ok { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	const maxUpload = 100 << 20 // 100MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
@@ -38,34 +42,46 @@ func (h *VideosHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "multipart parse error", http.StatusBadRequest)
 		return
 	}
+
 	title := r.FormValue("title")
 	f, hdr, err := r.FormFile("video_file")
-	if err != nil { http.Error(w, "archivo faltante", http.StatusBadRequest); return }
+	if err != nil {
+		http.Error(w, "archivo faltante", http.StatusBadRequest)
+		return
+	}
 	defer f.Close()
 
-	// Guardar temporalmente
-	base := "/data/uploads"
-	_ = os.MkdirAll(base, 0o775)
-	tmpPath := filepath.Join(base, filepath.Base(hdr.Filename))
-	out, err := os.Create(tmpPath)
-	if err != nil { http.Error(w, "cannot save file", http.StatusInternalServerError); return }
-	defer out.Close()
-	if _, err := io.Copy(out, f); err != nil { http.Error(w, "cannot write file", http.StatusInternalServerError); return }
+	// Generate S3 key for the uploaded file
+	s3Key := fmt.Sprintf("videos/%d/%s", uid, filepath.Base(hdr.Filename))
 
-	// Crear registro en DB con status uploaded
-	created, err := h.svc.Create(uid, title, tmpPath)
+	// Upload directly to S3 uploads bucket
+	if err := h.s3Client.UploadToUploads(r.Context(), s3Key, f); err != nil {
+		http.Error(w, "cannot upload to S3", http.StatusInternalServerError)
+		return
+	}
+
+	// Create registro en DB with S3 key instead of local path
+	created, err := h.svc.Create(uid, title, s3Key)
 	if err != nil {
+		// If DB creation fails, clean up S3 upload
+		_ = h.s3Client.DeleteFile(r.Context(), h.s3Client.GetUploadsBucket(), s3Key)
 		http.Error(w, "error al crear registro", http.StatusInternalServerError)
 		return
 	}
 
-	// Encolar trabajo
-	jobID, err := h.enqueuer.EnqueueVideoProcessing(r.Context(), created.VideoID, uid, title, tmpPath)
-	if err != nil { http.Error(w, "queue error", http.StatusInternalServerError); return }
+	// Encolar trabajo with S3 key
+	jobID, err := h.enqueuer.EnqueueVideoProcessing(r.Context(), created.VideoID, uid, title, s3Key)
+	if err != nil {
+		http.Error(w, "queue error", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Video subido correctamente. Procesamiento en curso.", "task_id": jobID})
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"message": "Video subido correctamente. Procesamiento en curso.",
+		"task_id": jobID,
+	})
 }
 
 func (h *VideosHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -131,18 +147,25 @@ func (h *VideosHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	v, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, repos.ErrNotFound) {
-			http.Error(w, "video no encontrado", http.StatusNotFound); return
+			http.Error(w, "video no encontrado", http.StatusNotFound)
+			return
 		}
-		http.Error(w, "video no encontrado", http.StatusNotFound); return
+		http.Error(w, "video no encontrado", http.StatusNotFound)
+		return
 	}
 	_ = json.NewEncoder(w).Encode(v)
 }
 
 func (h *VideosHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := mux.Vars(r)["id"]
-	if idStr == "" { idStr = r.URL.Query().Get("id") }
+	if idStr == "" {
+		idStr = r.URL.Query().Get("id")
+	}
 	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 { http.Error(w, "id inválido", http.StatusBadRequest); return }
+	if err != nil || id <= 0 {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
 
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, "error al eliminar video", http.StatusInternalServerError)
