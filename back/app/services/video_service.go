@@ -31,7 +31,7 @@ func NewVideoService(r VideoRepo) *VideoService { return &VideoService{repo: r} 
 func (s *VideoService) Create(userID int, title, s3Key string) (models.Video, error) {
 	// Store the S3 key in origin_url field for now
 	// The full S3 URL will be generated when needed
-	return s.repo.Create(context.Background(), models.Video{
+	return s.repo.Create(models.Video{
 		Title:     title,
 		OriginURL: s3Key, // Store S3 key, not full URL
 		Status:    models.StatusUploaded,
