@@ -92,10 +92,38 @@ func main() {
 	// Remove static file serving - files will be served directly from S3
 	// r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("/data/"))))
 
+	allowedOrigins := []string{
+		"http://localhost:3000",    // Local development
+		"http://localhost:5173",    // Vite dev server
+		getenv("FRONTEND_URL", ""), // Your S3 website URL
+	}
+
+	// Remove empty strings
+	var validOrigins []string
+	for _, origin := range allowedOrigins {
+		if origin != "" {
+			validOrigins = append(validOrigins, origin)
+		}
+	}
+
+	// Fallback to allow all if no specific origins configured
+	if len(validOrigins) == 0 {
+		validOrigins = []string{"*"}
+	}
+
 	cors := handlers.CORS(
-		handlers.AllowedOrigins([]string{"*"}),
+		handlers.AllowedOrigins(validOrigins),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-		handlers.AllowedHeaders([]string{"*"}),
+		handlers.AllowedHeaders([]string{
+			"Accept",
+			"Authorization",
+			"Content-Type",
+			"X-CSRF-Token",
+			"X-Requested-With",
+		}),
+		handlers.ExposedHeaders([]string{"Content-Length"}),
+		handlers.AllowCredentials(),
+		handlers.MaxAge(300), // Cache preflight requests for 5 minutes
 	)
 
 	port := getenv("PORT", "8080")
