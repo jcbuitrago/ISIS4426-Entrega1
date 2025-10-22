@@ -32,7 +32,7 @@ The ANB Rising Stars platform enables basketball players to:
 3. **Storage**: Processed videos stored in S3 processed bucket
 4. **Status Updates**: Real-time status tracking (`uploaded → processing → processed`)
 
-## 🗺️ Architecture Diagram
+## Architecture Diagram
 
 <div align="center">
 
@@ -46,13 +46,11 @@ The ANB Rising Stars platform enables basketball players to:
 
 #### **Frontend Tier**
 - **S3 Bucket**: Static website hosting for React SPA
-- **CloudFront**: CDN distribution for global performance
-- **Route 53**: DNS management (optional)
 
 #### **API Tier**
 - **Application Load Balancer (ALB)**: Public subnet, internet-facing
-- **Auto Scaling Group (ASG)**: 2-10 instances in private subnets
-- **EC2 Instances**: t3.medium, running containerized Go API
+- **Auto Scaling Group (ASG)**: 2-5 instances in private subnets
+- **EC2 Instances**: t3.micro, running containerized Go API
 - **Launch Template**: Automated deployment and scaling
 
 #### **Processing Tier**
@@ -76,9 +74,9 @@ The ANB Rising Stars platform enables basketball players to:
 #### **VPC Configuration**
 ```
 VPC (10.0.0.0/16)
-├── Public Subnets (10.0.1.0/24, 10.0.2.0/24)
+├── Public Subnets 
 │   └── Application Load Balancer
-├── Private Subnets (10.0.10.0/24, 10.0.11.0/24)
+├── Private Subnets
 │   ├── Auto Scaling Group (API instances)
 │   ├── Worker/Redis EC2
 │   └── RDS PostgreSQL
@@ -96,7 +94,7 @@ VPC (10.0.0.0/16)
 ## Technology Stack
 
 ### **Backend**
-- **Language**: Go 1.21+
+- **Language**: Go 1.23+
 - **Web Framework**: Gorilla Mux
 - **Database**: PostgreSQL with pgx driver
 - **Queue**: Redis + Asynq
@@ -155,28 +153,9 @@ VPC (10.0.0.0/16)
 
 ### **Prerequisites**
 - Docker & Docker Compose
-- Go 1.21+ (for local development)
+- Go 1.23+ (for local development)
 - Node.js 18+ (for frontend development)
 - PostgreSQL client (optional)
-
-### **Local Environment**
-```bash
-# Clone repository
-git clone <repository-url>
-cd ISIS4426-Entrega1
-
-# Set environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# Start local development
-docker compose up -d --build
-
-# Access services
-# Frontend: http://localhost:3000
-# API: http://localhost:8080
-# Asynqmon: http://localhost:8081
-```
 
 ### **Environment Variables**
 ```env
@@ -220,7 +199,7 @@ AWS_SECRET_ACCESS_KEY=your-secret
 #### **Launch Template**
 ```bash
 # Build and push Docker image
-docker build -f back/Dockerfile.api -t anb-api:latest ./back
+docker build -t anb-showcase-backend:api -f back/Dockerfile.api back
 
 # Create AMI from configured EC2 instance
 # Configure Launch Template with:
@@ -233,29 +212,29 @@ docker build -f back/Dockerfile.api -t anb-api:latest ./back
 #### **Auto Scaling Configuration**
 ```yaml
 Min Capacity: 2
-Max Capacity: 10
+Max Capacity: 5
 Desired Capacity: 2
-Health Check: ELB
+Health Check: /api/public/videos
 Scaling Policies:
   - Scale Out: CPU > 70% for 2 minutes
-  - Scale In: CPU < 30% for 5 minutes
 ```
 
 ### **Worker Deployment**
 ```bash
 # Deploy on dedicated EC2 instance
-docker run -d \
-  --name anb-worker \
-  --restart unless-stopped \
-  --env-file /etc/anb/.env \
-  -v /assets:/assets:ro \
-  anb-worker:latest
+docker run -d --name worker --restart unless-stopped \
+  -e DB_DSN="${DB_DSN}" \
+  -e REDIS_ADDR="localhost:6379" \
+  --network host \
+  -e AWS_REGION="${AWS_REGION}" \
+  -v /home/ubuntu/ISIS4426-Entrega1/assets:/assets:ro \
+  anb-showcase-backend:worker
 
-docker run -d \
-  --name redis \
-  --restart unless-stopped \
-  -p 6379:6379 \
-  redis:7 redis-server --appendonly yes
+docker run -d --name redis --restart unless-stopped   \
+      -p 6379:6379   \
+      -v worker_redis_data:/data   \
+      redis:7-alpine redis-server   \
+      --appendonly yes
 ```
 
 ### **Frontend Deployment**
@@ -309,7 +288,6 @@ GET /api/jobs/{id} - Get processing status
 ## Monitoring & Observability
 
 ### **Application Monitoring**
-- **Asynqmon**: Queue monitoring at `:8081`
 - **CloudWatch**: Infrastructure metrics
 - **ALB Access Logs**: Request tracking
 - **Application Logs**: Container stdout/stderr
@@ -331,9 +309,9 @@ GET /api/jobs/{id} - Get processing status
 ## Cost Optimization
 
 ### **Current Architecture Costs**
-- **Compute**: ASG instances (2-10 × t3.medium)
+- **Compute**: ASG instances (2-5 × t3.micro)
 - **Storage**: S3 Standard for videos, RDS storage
-- **Network**: CloudFront data transfer, ALB usage
+- **Network**: ALB usage
 - **Database**: RDS PostgreSQL (db.t3.micro recommended)
 
 ### **Optimization Strategies**
@@ -345,7 +323,6 @@ GET /api/jobs/{id} - Get processing status
 ## Security Considerations
 
 ### **Data Protection**
-- HTTPS enforcement via CloudFront/ALB
 - JWT token-based authentication
 - S3 bucket policies for access control
 - RDS encryption at rest and in transit
@@ -385,9 +362,6 @@ GET /api/jobs/{id} - Get processing status
 # Check API health
 curl http://your-alb-endpoint/api/public/videos
 
-# Monitor processing queue
-redis-cli -h worker-ip LLEN videos
-
 # Check database connections
 psql -h rds-endpoint -U username -d database -c "SELECT count(*) FROM pg_stat_activity;"
 ```
@@ -400,4 +374,4 @@ Please read our contributing guidelines and ensure all tests pass before submitt
 
 ## License
 
-© 2024 Asociación Nacional de Baloncesto. All rights reserved.
+© 2024 Universidad de los Andes. All rights reserved.
