@@ -4,8 +4,7 @@ A scalable basketball video showcase platform where players upload videos demons
 
 ## Table of Contents
 - [System Overview](#system-overview)
-- [Architecture Evolution](#architecture-evolution)
-- [AWS Production Architecture](#aws-production-architecture)
+- [Architecture Diagram](#architecture-diagram)
 - [Technology Stack](#technology-stack)
 - [Key Features](#key-features)
 - [Development Setup](#development-setup)
