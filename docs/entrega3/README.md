@@ -21,6 +21,10 @@ The ANB Rising Stars platform enables basketball players to:
 - View rankings and leaderboards
 - Manage personal profiles and avatars
 
+### Live Demo
+
+https://youtu.be/iCycupHx89M?si=nt3seMqCa_LuL3C5
+
 ### Video Processing Pipeline
 1. **Upload**: Videos uploaded to S3 uploads bucket
 2. **Processing**: Asynchronous processing with FFmpeg
