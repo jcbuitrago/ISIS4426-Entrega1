@@ -30,7 +30,7 @@ func main() {
 	repo := repos.NewVideoRepoPG(sqlDB)
 	svc := services.NewVideoService(repo)
 
-	enq := async.NewEnqueuer(getenv("REDIS_ADDR", "redis:6379"))
+	enq := async.NewEnqueuer(getenv("REDIS_ADDR", "10.0.141.178:6379"))
 	defer enq.Client.Close()
 
 	// Initialize S3 client from SSM parameters
@@ -96,6 +96,7 @@ func main() {
 		"http://localhost:3000",    // Local development
 		"http://localhost:5173",    // Vite dev server
 		getenv("FRONTEND_URL", ""), // Your S3 website URL
+		"http://anb-frontend.s3-website-us-east-1.amazonaws.com",
 	}
 
 	// Remove empty strings
@@ -112,15 +113,9 @@ func main() {
 	}
 
 	cors := handlers.CORS(
-		handlers.AllowedOrigins(validOrigins),
+		handlers.AllowedOrigins([]string{"*"}),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-		handlers.AllowedHeaders([]string{
-			"Accept",
-			"Authorization",
-			"Content-Type",
-			"X-CSRF-Token",
-			"X-Requested-With",
-		}),
+		handlers.AllowedHeaders([]string{"Accept", "Authorization", "Content-Type", "X-Requested-With", "Origin"}),
 		handlers.ExposedHeaders([]string{"Content-Length"}),
 		handlers.AllowCredentials(),
 		handlers.MaxAge(300), // Cache preflight requests for 5 minutes
