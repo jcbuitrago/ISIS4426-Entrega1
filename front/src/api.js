@@ -143,10 +143,23 @@ export const api = {
     });
     return handleJson(res);
   },
+  async unvoteVideo(id) {
+    const res = await fetch(`${API_BASE_URL}/api/public/videos/${id}/vote`, {
+      method: "DELETE",
+      headers: { ...authHeaders() },
+    });
+    return handleJson(res);
+  },
   async rankings({ city } = {}) {
     const qs = new URLSearchParams();
     if (city) qs.set("city", city);
     const res = await fetch(`${API_BASE_URL}/api/public/rankings?${qs.toString()}`);
+    return handleJson(res);
+  },
+  async getMyVotes() {
+    const res = await fetch(`${API_BASE_URL}/api/public/my-votes`, {
+      headers: { ...authHeaders() }
+    });
     return handleJson(res);
   },
 };

@@ -23,12 +23,8 @@ export default function VotingGallery() {
       try {
         const [videos, my] = await Promise.all([
           api.listPublicVideos({ limit: 48, offset: 0 }),
-          // Use api.js instead of hardcoded fetch
-          fetch('/api/public/my-votes', { 
-            headers: { 
-              Authorization: `Bearer ${getAccessToken()}` 
-            } 
-          }).then(r => r.json())
+          // Fix: Use proper API function instead of hardcoded fetch
+          api.getMyVotes() // We need to create this function
         ]);
         if (!mounted) return;
         const mapped = (videos || []).map((d) => ({
@@ -64,17 +60,7 @@ export default function VotingGallery() {
   
   const unvote = async (id) => {
     try {
-      // Fix: Use api base URL instead of hardcoded path
-      const API_BASE_URL = import.meta.env.PROD ? 
-        (import.meta.env.VITE_API_BASE_URL || 'http://anb-alb-1580832969.us-east-1.elb.amazonaws.com') : '';
-      
-      await fetch(`${API_BASE_URL}/api/public/videos/${id}/vote`, { 
-        method: 'DELETE', 
-        headers: { 
-          Authorization: `Bearer ${getAccessToken()}` 
-        } 
-      });
-      
+      await api.unvoteVideo(id);
       setItems((prev) => prev.map((it) => it.id === String(id) ? { ...it, votes: Math.max((it.votes || 0) - 1, 0) } : it));
       const next = new Set(Array.from(votedIds)); 
       next.delete(String(id)); 
