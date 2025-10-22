@@ -33,29 +33,13 @@ The ANB Rising Stars platform enables basketball players to:
 3. **Storage**: Processed videos stored in S3 processed bucket
 4. **Status Updates**: Real-time status tracking (`uploaded → processing → processed`)
 
-## Architecture Evolution
+## 🗺️ Architecture Diagram
 
-### Phase 1: Local Development
-```
-Frontend (Vite) → API (Go) → Worker (Go+FFmpeg)
-                   ↓           ↓
-               PostgreSQL ← Redis Queue
-                   ↓
-            Local File Storage (/data)
-```
+<div align="center">
 
-### Phase 2: AWS Migration (Current Production)
-```
-Internet → CloudFront → S3 (Frontend)
-         ↓
-Internet → ALB → ASG (API Instances) → RDS PostgreSQL
-                  ↓                     ↑
-         Worker/Redis EC2 ←────────────┘
-                  ↓
-            S3 (Video Storage)
-```
+  <img src="Diagrama3.svg" alt="Architecture Diagram" width="60%">
 
-## AWS Production Architecture
+</div>
 
 ### Infrastructure Components
 
