@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"ISIS4426-Entrega1/app/async"
 	"ISIS4426-Entrega1/app/middleware"
@@ -26,34 +27,62 @@ func getenv(k, d string) string {
 }
 
 func main() {
+	log.Println("Starting ANB API Server...")
+
+	log.Println("Initializing database connection...")
 	sqlDB := appdb.MustOpen()
+	log.Println("Database connection established! ✅")
+
+	log.Println("Initializing repositories and services...")
 	repo := repos.NewVideoRepoPG(sqlDB)
 	svc := services.NewVideoService(repo)
+	log.Println("Repositories and services initialized ✅")
 
-	enq := async.NewEnqueuer(getenv("REDIS_ADDR", "10.0.141.178:6379"))
+	redisAddr := getenv("REDIS_ADDR", "redis:6379")
+	log.Printf("Connecting to Redis at: %s", redisAddr)
+	enq := async.NewEnqueuer(redisAddr)
 	defer enq.Client.Close()
 
+	// Testing Redis connection
+	if err := enq.Client.Ping(); err != nil {
+		log.Printf("❌ Redis connection failed: %v", err)
+		log.Fatal("Cannot connect to Redis")
+	}
+	log.Println("Redis connection established ✅")
+
 	// Initialize S3 client from SSM parameters
+	log.Println("Initializing S3 service...")
 	s3Client, err := s3client.NewFromSSM(
 		context.Background(),
 		"/anb/s3/uploads-bucket",
 		"/anb/s3/processed-bucket",
 	)
 	if err != nil {
-		log.Fatal("Failed to initialize S3 client:", err)
+		log.Printf("❌ S3 client initialization failed: %v", err)
+		log.Fatal("Cannot initialize S3 client")
 	}
+	log.Println("✅ S3 client initialized")
 
 	// auth
+	log.Println("Initializing auth services...")
 	userRepo := repos.NewUserRepoPG(sqlDB)
 	authSvc := services.NewAuthService(userRepo)
 	authH := routers.NewAuthHandler(authSvc, s3Client) // Pass S3 client for avatar uploads
+	log.Println("✅ Auth services initialized")
 
 	// videos - pass S3 client to handler
+	log.Println("🎬 Initializing video handlers...")
 	h := routers.NewVideosHandler(enq, svc, s3Client)
 	hJobs := routers.NewJobsHandler(enq)
 	pubH := routers.NewPublicHandler(sqlDB)
+	log.Println("✅ Video handlers initialized")
 
+	log.Println("🌐 Setting up routes...")
 	r := mux.NewRouter()
+
+	// Add request logging middleware
+	r.Use(loggingMiddleware)
+
 	api := r.PathPrefix("/api").Subrouter()
 
 	// auth routes
@@ -89,6 +118,8 @@ func main() {
 	my.HandleFunc("/my-votes", pubH.MyVotes).Methods("GET")
 	api.HandleFunc("/public/rankings", pubH.Rankings).Methods("GET")
 
+	log.Println("✅ Routes configured")
+
 	// Remove static file serving - files will be served directly from S3
 	// r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("/data/"))))
 
@@ -122,6 +153,40 @@ func main() {
 	)
 
 	port := getenv("PORT", "8080")
-	log.Printf("API listening on :%s", port)
+	log.Printf("🎯 API server starting on port %s", port)
+	log.Printf("📍 Environment: DB_DSN=%s", getenv("DB_DSN", "not set"))
+	log.Printf("📍 Environment: REDIS_ADDR=%s", redisAddr)
+	log.Printf("📍 Environment: AWS_REGION=%s", getenv("AWS_REGION", "not set"))
+
+	log.Printf("✨ ANB API Server ready and listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, cors(r)))
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		wrapped := &responseWriter{ResponseWriter: w, statusCode: 200}
+
+		next.ServeHTTP(wrapped, r)
+
+		duration := time.Since(start)
+		log.Printf("📝 %s %s - %d - %v - %s",
+			r.Method,
+			r.URL.Path,
+			wrapped.statusCode,
+			duration,
+			r.RemoteAddr,
+		)
+	})
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }
