@@ -5,25 +5,35 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"ISIS4426-Entrega1/app/async"
 	"github.com/gorilla/mux"
 )
 
-type JobsHandler struct{ enq *async.Enqueuer }
+type StatusGetter interface {
+	GetStatus(ctx context.Context, jobID string) (string, error)
+}
 
-func NewJobsHandler(e *async.Enqueuer) *JobsHandler { return &JobsHandler{enq: e} }
+type JobsHandler struct {
+	enqueuer StatusGetter
+}
+
+func NewJobsHandler(e StatusGetter) *JobsHandler {
+	return &JobsHandler{enqueuer: e}
+}
 
 // GET /api/jobs/{id}
-func (h *JobsHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	if id == "" {
-		http.Error(w, "id faltante", http.StatusBadRequest)
-		return
-	}
-	status, err := h.enq.GetStatus(context.Background(), id)
+func (h *JobsHandler) GetJobStatus(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	jobID := vars["id"]
+
+	status, err := h.enqueuer.GetStatus(r.Context(), jobID)
 	if err != nil {
-		http.Error(w, "no encontrado", http.StatusNotFound)
+		http.Error(w, "job not found", http.StatusNotFound)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": status})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"job_id": jobID,
+		"status": status,
+	})
 }

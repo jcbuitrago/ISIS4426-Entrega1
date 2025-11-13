@@ -37,3 +37,14 @@ CREATE TABLE IF NOT EXISTS votes (
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   PRIMARY KEY (video_id, user_id)
 );
+
+-- JOB STATUS
+CREATE TABLE IF NOT EXTIST job_status (
+  jobID         VARCHAR(25) PRIMARY KEY,
+  status        VARCHAR(25) NOT NULL,
+  created_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
+  expires_at    TIMESTAMP    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_status_expires ON job_status(expires_at);

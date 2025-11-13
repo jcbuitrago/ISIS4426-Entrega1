@@ -11,7 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const TypeProcessVideo = "video:process"
+//const TypeProcessVideo = "video:process"
 
 type ProcessVideoPayload struct {
 	JobID     string `json:"job_id"`

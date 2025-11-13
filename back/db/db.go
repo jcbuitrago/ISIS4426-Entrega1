@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -31,13 +32,13 @@ func MustOpen() *sql.DB {
 	dsn := dsnFromEnv()
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to open database: %v", err)
 	}
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
 	if err := db.Ping(); err != nil {
-		panic(err)
+		log.Fatalf("Failed to ping database: %v", err)
 	}
 	return db
 }

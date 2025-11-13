@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"ISIS4426-Entrega1/app/async"
 	"ISIS4426-Entrega1/app/middleware"
 	"ISIS4426-Entrega1/app/models"
 	"ISIS4426-Entrega1/app/repos"
@@ -19,14 +18,18 @@ import (
 	"github.com/gorilla/mux"
 )
 
+type Enqueuer interface {
+	EnqueueVideoProcessing(ctx interface{}, videoID, userID int, title, s3Key string) (string, error)
+}
+
 type VideosHandler struct {
-	enqueuer *async.Enqueuer
+	enqueuer Enqueuer
 	svc      *services.VideoService
 	s3Client *s3client.S3Client
 }
 
-func NewVideosHandler(e *async.Enqueuer, s *services.VideoService, s3 *s3client.S3Client) *VideosHandler {
-	return &VideosHandler{enqueuer: e, svc: s, s3Client: s3}
+func NewVideosHandler(enq Enqueuer, s *services.VideoService, s3 *s3client.S3Client) *VideosHandler {
+	return &VideosHandler{enqueuer: enq, svc: s, s3Client: s3}
 }
 
 func (h *VideosHandler) Create(w http.ResponseWriter, r *http.Request) {
