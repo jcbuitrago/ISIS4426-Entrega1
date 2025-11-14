@@ -29,16 +29,17 @@ func getenv(k, d string) string {
 }
 
 func run(cmd *exec.Cmd) error {
-	start := time.Now()
 	log.Printf("[worker] exec start cmd=%q", cmd.String())
-	err := cmd.Run()
-	dur := time.Since(start)
+	clone := exec.Command(cmd.Path, cmd.Args[1:]...)
+	clone.Env = cmd.Env
+	clone.Dir = cmd.Dir
+
+	log.Printf("[worker] Running: %s", clone.String())
+	out, err := clone.CombinedOutput()
 	if err != nil {
-		log.Printf("[worker] exec error cmd=%q dur=%v err %v", cmd.String(), dur, err)
-		return err
+		return fmt.Errorf("command failed: %s: %w\noutput:\n%s", clone.String(), err, string(out))
 	}
-	log.Printf("[worker] exec done cmd=%q dur=%v", cmd.String(), dur)
-	return cmd.Run()
+	return nil
 }
 
 func processVideo(ctx context.Context, p async.VideoProcessingPayload, svc *services.VideoService, status *async.SQSEnqueuer, s3Client *s3client.S3Client) error {
