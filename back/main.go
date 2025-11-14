@@ -84,12 +84,22 @@ func main() {
 
 	api := r.PathPrefix("/api").Subrouter()
 
+	api.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}).Methods("GET")
+
 	api.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 
 		if err := sqlDB.PingContext(ctx); err != nil {
 			http.Error(w, "db not ready", http.StatusServiceUnavailable)
+			return
+		}
+		if err := enq.Ping(ctx); err != nil {
+			http.Error(w, "sqs not ready", http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

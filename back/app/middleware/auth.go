@@ -13,6 +13,7 @@ import (
 type ctxKey string
 
 const userIDKey ctxKey = "user_id"
+const InvalidToken = "invalid token"
 
 func UserIDFromContext(ctx context.Context) (int, bool) {
 	v := ctx.Value(userIDKey)
@@ -25,7 +26,7 @@ func AuthRequired(next http.Handler) http.Handler {
 		auth := r.Header.Get("Authorization")
 		parts := strings.Fields(auth) // separa por espacios múltiples
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			http.Error(w, "token faltante", http.StatusUnauthorized)
+			http.Error(w, InvalidToken, http.StatusUnauthorized)
 			return
 		}
 		tokenStr := parts[1]
@@ -37,12 +38,12 @@ func AuthRequired(next http.Handler) http.Handler {
 			return []byte(secret), nil
 		}, jwt.WithValidMethods([]string{"HS256"}))
 		if err != nil || !tok.Valid {
-			http.Error(w, "token inválido", http.StatusUnauthorized)
+			http.Error(w, InvalidToken, http.StatusUnauthorized)
 			return
 		}
 		claims, ok := tok.Claims.(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "token inválido", http.StatusUnauthorized)
+			http.Error(w, InvalidToken, http.StatusUnauthorized)
 			return
 		}
 		// expiry
@@ -54,7 +55,7 @@ func AuthRequired(next http.Handler) http.Handler {
 		}
 		uidFloat, ok := claims["user_id"].(float64)
 		if !ok {
-			http.Error(w, "token inválido", http.StatusUnauthorized)
+			http.Error(w, InvalidToken, http.StatusUnauthorized)
 			return
 		}
 		uid := int(uidFloat)
