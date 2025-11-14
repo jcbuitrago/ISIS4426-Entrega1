@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS votes (
 
 -- JOB STATUS
 CREATE TABLE IF NOT EXISTS job_status (
-  job_id         VARCHAR(25) PRIMARY KEY,
-  status        VARCHAR(25) NOT NULL,
+  job_id        VARCHAR(25) PRIMARY KEY,
+  status        TEXT NOT NULL,
   created_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMP    NOT NULL DEFAULT NOW(),
   expires_at    TIMESTAMP    NOT NULL

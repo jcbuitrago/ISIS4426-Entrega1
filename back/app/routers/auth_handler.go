@@ -13,6 +13,8 @@ import (
 	"ISIS4426-Entrega1/internal/s3client"
 )
 
+const invalidJSONMsg = "invalid json"
+
 type AuthHandler struct {
 	svc      *services.AuthService
 	s3Client *s3client.S3Client
@@ -34,7 +36,7 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 	var body req
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "json inválido", http.StatusBadRequest)
+		http.Error(w, invalidJSONMsg, http.StatusBadRequest)
 		return
 	}
 	u, err := h.svc.Signup(r.Context(), body.FirstName, body.LastName, body.Email, body.City, body.Country, body.Password1, body.Password2)
@@ -68,7 +70,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	var body req
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "json inválido", http.StatusBadRequest)
+		http.Error(w, invalidJSONMsg, http.StatusBadRequest)
 		return
 	}
 	tok, exp, err := h.svc.Login(r.Context(), body.Email, body.Password, body.Remember)
@@ -119,7 +121,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	var body req
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "json inválido", http.StatusBadRequest)
+		http.Error(w, invalidJSONMsg, http.StatusBadRequest)
 		return
 	}
 	if err := h.svc.Users().UpdateProfile(r.Context(), uid, body.FirstName, body.LastName, body.City, body.Country); err != nil {

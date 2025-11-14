@@ -159,7 +159,7 @@ func (e *SQSEnqueuer) createJobStatus(ctx context.Context, jobID string, status 
 	`
 	_, err := e.db.ExecContext(ctx, query, jobID, status)
 	if err != nil {
-		return fmt.Errorf("Failed to insert job instatus: %w", err)
+		return fmt.Errorf("failed to insert job instatus: %w", err)
 	}
 
 	return nil
@@ -170,8 +170,12 @@ func (e *SQSEnqueuer) cleanupExpiredJobStatuses(ctx context.Context) error {
 	const query = `DELETE FROM job_status WHERE expires_at < NOW()`
 	_, err := e.db.ExecContext(ctx, query)
 	if err != nil {
-		return fmt.Errorf("Error while cleaning up expired job statuses: %w", err)
+		return fmt.Errorf("error while cleaning up expired job statuses: %w", err)
 	}
 
 	return nil
+}
+
+func (e *SQSEnqueuer) CleanupExpiredStatuses(ctx context.Context) error {
+	return e.cleanupExpiredJobStatuses(ctx)
 }

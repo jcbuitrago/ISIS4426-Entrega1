@@ -3,6 +3,7 @@ package routers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -27,9 +28,11 @@ func (h *JobsHandler) GetJobStatus(w http.ResponseWriter, r *http.Request) {
 
 	status, err := h.enqueuer.GetStatus(r.Context(), jobID)
 	if err != nil {
+		log.Printf("[api] jobs: not found job_id=%s", jobID)
 		http.Error(w, "job not found", http.StatusNotFound)
 		return
 	}
+	log.Printf("[api] jobs: status job_id=%s status=%s", jobID, status)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{

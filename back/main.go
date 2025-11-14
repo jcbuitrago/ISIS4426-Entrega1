@@ -38,17 +38,16 @@ func main() {
 	svc := services.NewVideoService(repo)
 	log.Println("Repositories and services initialized ✅")
 
-	redisAddr := getenv("REDIS_ADDR", "redis:6379")
-	log.Printf("Connecting to Redis at: %s", redisAddr)
-	enq := async.NewEnqueuer(redisAddr)
-	defer enq.Client.Close()
-
-	// Testing Redis connection
-	if err := enq.Client.Ping(); err != nil {
-		log.Printf("❌ Redis connection failed: %v", err)
-		log.Fatal("Cannot connect to Redis")
+	queueURL := getenv("SQS_QUEUE_URL", "")
+	if queueURL == "" {
+		log.Fatal("SQS_QUEUE_URL is required")
 	}
-	log.Println("Redis connection established ✅")
+
+	enq, err := async.NewSQSEnqueuer(context.Background(), queueURL, sqlDB)
+	if err != nil {
+		log.Fatalf("Cannot initialize SQS enqueuer: %v", err)
+	}
+	defer enq.Close()
 
 	// Initialize S3 client from SSM parameters
 	log.Println("Initializing S3 service...")
@@ -85,6 +84,19 @@ func main() {
 
 	api := r.PathPrefix("/api").Subrouter()
 
+	api.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		if err := sqlDB.PingContext(ctx); err != nil {
+			http.Error(w, "db not ready", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ready"))
+	}).Methods("GET")
+
 	// auth routes
 	api.HandleFunc("/auth/signup", authH.Signup).Methods("POST")
 	api.HandleFunc("/auth/login", authH.Login).Methods("POST")
@@ -105,7 +117,7 @@ func main() {
 	videos.HandleFunc("/{id}", h.Delete).Methods("DELETE")
 
 	// jobs (optional, public)
-	api.HandleFunc("/jobs/{id}", hJobs.Get).Methods("GET")
+	api.HandleFunc("/jobs/{id}", hJobs.GetJobStatus).Methods("GET")
 
 	// public endpoints
 	api.HandleFunc("/public/videos", pubH.ListVideos).Methods("GET")
@@ -155,7 +167,7 @@ func main() {
 	port := getenv("PORT", "8080")
 	log.Printf("🎯 API server starting on port %s", port)
 	log.Printf("📍 Environment: DB_DSN=%s", getenv("DB_DSN", "not set"))
-	log.Printf("📍 Environment: REDIS_ADDR=%s", redisAddr)
+	log.Printf("📍 Environment: SQS_QUEUE_URL=%s", queueURL)
 	log.Printf("📍 Environment: AWS_REGION=%s", getenv("AWS_REGION", "not set"))
 
 	log.Printf("✨ ANB API Server ready and listening on :%s", port)

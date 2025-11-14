@@ -1,9 +1,11 @@
 package routers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -19,7 +21,7 @@ import (
 )
 
 type Enqueuer interface {
-	EnqueueVideoProcessing(ctx interface{}, videoID, userID int, title, s3Key string) (string, error)
+	EnqueueVideoProcessing(ctx context.Context, videoID, userID int, title, s3Key string) (string, error)
 }
 
 type VideosHandler struct {
@@ -35,6 +37,7 @@ func NewVideosHandler(enq Enqueuer, s *services.VideoService, s3 *s3client.S3Cli
 func (h *VideosHandler) Create(w http.ResponseWriter, r *http.Request) {
 	uid, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
+		log.Printf("[api] upload: unauthorized request from %s", r.RemoteAddr)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -57,27 +60,35 @@ func (h *VideosHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Generate S3 key for the uploaded file
 	s3Key := fmt.Sprintf("videos/%d/%s", uid, filepath.Base(hdr.Filename))
 
+	log.Printf("[api] upload: start user_id=%d title=%q", uid, title)
+
 	// Upload directly to S3 uploads bucket
 	if err := h.s3Client.UploadToUploads(r.Context(), s3Key, f); err != nil {
+		log.Printf("[api] upload: s3 upload failed user_id=%d s3_key=%q err=%v", uid, s3Key, err)
 		http.Error(w, "cannot upload to S3", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[api] upload: s3 upload ok user_id=%d s3_key=%q", uid, s3Key)
 
 	// Create registro en DB with S3 key instead of local path
 	created, err := h.svc.Create(uid, title, s3Key)
 	if err != nil {
 		// If DB creation fails, clean up S3 upload
+		log.Printf("[api] upload: db create failed user_id=%d s3_key=%q err=%v", uid, s3Key, err)
 		_ = h.s3Client.DeleteFile(r.Context(), h.s3Client.GetUploadsBucket(), s3Key)
 		http.Error(w, "error al crear registro", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[api] upload: db create ok user_id=%d video_id=%d", uid, created.VideoID)
 
 	// Encolar trabajo with S3 key
 	jobID, err := h.enqueuer.EnqueueVideoProcessing(r.Context(), created.VideoID, uid, title, s3Key)
 	if err != nil {
+		log.Printf("[api] upload: enqueue failed user_id=%d video_id=%d s3_key=%q err=%v", uid, created.VideoID, s3Key, err)
 		http.Error(w, "queue error", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[api] upload: enqueue ok user_id=%d video_id=%d job_id=%s", uid, created.VideoID, jobID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
