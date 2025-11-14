@@ -48,6 +48,7 @@ func main() {
 		log.Fatalf("Cannot initialize SQS enqueuer: %v", err)
 	}
 	defer enq.Close()
+	log.Printf("[worker] SQS enqueuer initialized with url: %s", queueURL)
 
 	// Initialize S3 client from SSM parameters
 	log.Println("Initializing S3 service...")
@@ -162,11 +163,14 @@ func main() {
 
 	// Fallback to allow all if no specific origins configured
 	if len(validOrigins) == 0 {
-		validOrigins = []string{"*"}
+		validOrigins = []string{
+			"http://localhost:3000",
+			"http://localhost:5173",
+		}
 	}
 
 	cors := handlers.CORS(
-		handlers.AllowedOrigins([]string{"*"}),
+		handlers.AllowedOrigins(validOrigins),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Accept", "Authorization", "Content-Type", "X-Requested-With", "Origin"}),
 		handlers.ExposedHeaders([]string{"Content-Length"}),
