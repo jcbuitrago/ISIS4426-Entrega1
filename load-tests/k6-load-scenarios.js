@@ -1,6 +1,8 @@
 import http from 'k6/http';
 import { Trend, Counter } from 'k6/metrics';
 import { check, sleep } from 'k6';
+import { SharedArray } from 'k6/data';
+import { b64encode } from 'k6/encoding';
 
 function boolEnv(name, fallback = false) {
   const raw = (__ENV[name] || '').trim().toLowerCase();
@@ -42,8 +44,11 @@ const PUBLIC_STAGES = parseJSONEnv(
   ],
 );
 
-const scenarios = {
-  browse_public: {
+const scenarios = {};
+
+// Solo agregar browse_public si tiene rate > 0
+if (Number(__ENV.PUBLIC_PEAK_RATE || 30) > 0) {
+  scenarios.browse_public = {
     executor: 'ramping-arrival-rate',
     startRate: Number(__ENV.PUBLIC_START_RATE || 5),
     stages: PUBLIC_STAGES,
@@ -51,8 +56,12 @@ const scenarios = {
     preAllocatedVUs: Number(__ENV.PUBLIC_MIN_VUS || 10),
     maxVUs: Number(__ENV.PUBLIC_MAX_VUS || 150),
     exec: 'browsePublic',
-  },
-  browse_frontend: {
+  };
+}
+
+// Solo agregar browse_frontend si tiene rate > 0
+if (Number(__ENV.FRONT_RATE || 8) > 0) {
+  scenarios.browse_frontend = {
     executor: 'constant-arrival-rate',
     rate: Number(__ENV.FRONT_RATE || 8),
     duration: __ENV.FRONT_DURATION || '5m',
@@ -61,10 +70,22 @@ const scenarios = {
     maxVUs: Number(__ENV.FRONT_MAX_VUS || 80),
     exec: 'browseLanding',
     startTime: __ENV.FRONT_START_TIME || '30s',
-  },
-};
+  };
+}
 
-const videoBinary = ENABLE_UPLOADS ? open(VIDEO_FILE, 'b') : null;
+// Cargar el archivo de video como binario
+let videoBinary = null;
+if (ENABLE_UPLOADS) {
+  try {
+    videoBinary = open(VIDEO_FILE, 'b');
+    const size = videoBinary ? (videoBinary.byteLength || videoBinary.length || 0) : 0;
+    console.log(`✓ Video cargado exitosamente: ${VIDEO_FILE}`);
+    console.log(`✓ Tamaño del video: ${size} bytes`);
+  } catch (err) {
+    console.error(`✗ ERROR cargando video ${VIDEO_FILE}: ${err.message}`);
+    console.error(`Asegúrate de que el archivo existe en la ruta especificada`);
+  }
+}
 
 if (ENABLE_UPLOADS && videoBinary) {
   scenarios.upload_videos = {
@@ -185,9 +206,17 @@ export function uploadVideos() {
     sleep(1);
     return;
   }
+  
+  const title = `load-test-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  console.log(`[UPLOAD] Intentando subir video: ${title}`);
+  console.log(`[UPLOAD] URL: ${API_BASE_URL}/videos`);
+  const fileSize = videoBinary ? (videoBinary.byteLength || videoBinary.length || 0) : 0;
+  console.log(`[UPLOAD] Token presente: ${JWT_TOKEN ? 'SÍ' : 'NO'}`);
+  console.log(`[UPLOAD] Tamaño del archivo: ${fileSize} bytes`);
+  
   const payload = {
-    title: `load-test-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-    file: http.file(videoBinary, 'load-test.mp4', 'video/mp4'),
+    title: title,
+    video_file: http.file(videoBinary, 'load-test.mp4', 'video/mp4'),
   };
   const params = {
     headers: {
@@ -195,8 +224,22 @@ export function uploadVideos() {
     },
     tags: { endpoint: 'POST /videos' },
   };
+  
   const res = http.post(`${API_BASE_URL}/videos`, payload, params);
   uploadDuration.add(res.timings.duration);
+  
+  console.log(`[UPLOAD] Status Code: ${res.status}`);
+  console.log(`[UPLOAD] Response Body: ${res.body}`);
+  console.log(`[UPLOAD] Response Headers: ${JSON.stringify(res.headers)}`);
+  
+  const success = res.status === 201 || res.status === 202;
+  if (!success) {
+    console.error(`[UPLOAD] ERROR - Expected 201/202, got ${res.status}`);
+    console.error(`[UPLOAD] ERROR Body: ${res.body}`);
+  } else {
+    console.log(`[UPLOAD] ✓ Video subido exitosamente`);
+  }
+  
   check(res, {
     'upload accepted (201/202)': (r) => r.status === 201 || r.status === 202,
   });
