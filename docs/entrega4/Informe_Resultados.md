@@ -81,7 +81,7 @@ Las pruebas de carga se realizaron escalando desde usuarios concurrentes hasta u
 *La gráfica muestra cómo la carga de usuarios (VUs) aumentó progresivamente durante la prueba hasta alcanzar el pico.*
 
 ### 5.2. Latencia por Escenario (Escala Logarítmica)
-![Latencias](../../load-test/report_assets/graph_latency_log.png)
+![Latencias](../../load-tests/report_assets/graph_latency_log.png)
 *Distribución de tiempos de respuesta en el tiempo. Se utiliza escala logarítmica para visualizar tanto las peticiones rápidas como los picos de latencia extremos (outliers).*
 
 
